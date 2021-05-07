@@ -1,6 +1,6 @@
 /**
- * baudot.java
- * Created from baudot.c, baudot.h
+ * Baudot.java
+ * Created from baudot.c, baudot.h @ https://github.com/kamalmostafa/minimodem
  */
 package minimodem.samsonov.net;
 
@@ -251,10 +251,11 @@ public class Baudot {
 
             if      (_charset == 1)      {  databitsOutp[n++] = _LTRS; }
             else if (_charset == 2)      {  databitsOutp[n++] = _FIGS; }
+            else    { _fatalError(charOut); }
+            fLogger.trace("emit charset select 0x%02x", databitsOutp[n - 1]);
         }
 
         if(!(_charset == 1 || _charset == 2)) { _fatalError(charOut); }
-        fLogger.trace("emit charset select 0x%02x", databitsOutp[n - 1]);
 
 
         databitsOutp[n++] = _encodeTable[Byte.toUnsignedInt(ind)][0];

@@ -22,11 +22,13 @@ class Minimodem
 		logger.error("We've just greeted the user!");
 		logger.fatal("We've just greeted the user!");
 
-		Baudot b = new Baudot();
+		EncoderDecoder e = new DatabitsBaudot();
 		int[] db = new int[2];
+		int rb = e.encode(db, (byte)'A');
+		 rb = e.encode(db, (byte)0x12);
 
-		int r = b.encode(db, (byte)'A');
-
+		e = new DatabitsAscii8();
+		int rd = e.encode(db, (byte)'A');
 
 	}
 }
