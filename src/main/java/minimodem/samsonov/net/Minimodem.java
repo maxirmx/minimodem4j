@@ -3,6 +3,8 @@ package minimodem.samsonov.net;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import javax.sound.sampled.*;
+
 
 /* This is a simple Java program.
 FileName : "HelloWorld.java". */
@@ -22,7 +24,7 @@ class Minimodem
 		logger.error("We've just greeted the user!");
 		logger.fatal("We've just greeted the user!");
 
-		EncoderDecoder e = new DatabitsBaudot();
+		IEncodeDecode e = new DatabitsBaudot();
 		int[] db = new int[2];
 		int rb = e.encode(db, (byte)'A');
 		 rb = e.encode(db, (byte)0x12);

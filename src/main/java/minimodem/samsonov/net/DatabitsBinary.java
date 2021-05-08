@@ -9,7 +9,7 @@ package minimodem.samsonov.net;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class DatabitsBinary implements EncoderDecoder {
+public class DatabitsBinary implements IEncodeDecode {
 
     private static final Logger fLogger = LogManager.getFormatterLogger("DatabitsBinary");
     /**
