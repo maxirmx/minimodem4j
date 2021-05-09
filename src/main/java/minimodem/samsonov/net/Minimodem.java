@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.Stack;
 import java.util.concurrent.Callable;
 
+import minimodem.samsonov.net.helpers.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -17,13 +18,14 @@ import picocli.CommandLine.Parameters;
 class Minimodem implements Callable<Integer> {
 	private static final Logger fLogger = LogManager.getFormatterLogger("Minimodem");
 
-	private enum TXMODE { UNKNOWN, RECEIVE, TRANSMIT };
-
 	static class OpMode {
 		@Option(names = {"-t", "--tx", "--transmit", "--write"}, required = true) 		private boolean oTransmit;
 		@Option(names = {"-r", "--rx", "--receive", "--read"}, required = true) 		private boolean oReceive;
 	}
-	@CommandLine.ArgGroup(exclusive = true, multiplicity = "1") 						TXMODE txMode;
+	@CommandLine.ArgGroup(exclusive = true, multiplicity = "1") 						private OpMode opMode;
+
+	private enum TXMODE { UNKNOWN, RECEIVE, TRANSMIT };
+	protected TXMODE txMode;
 
 	@Option(names = {"-c", "--confidence"}, paramLabel = "{min-confidence-threshold}", defaultValue = "1.5f",
 			description = "Signal-to-noise squelch control, The minimum SNR-ish confidence level seen as \"a signal\"")
@@ -35,14 +37,9 @@ class Minimodem implements Callable<Integer> {
 					"low performance, but higher decode quality, for noisy or hard-to-discern signals " +
 					"(Bell 103, or skewed rates).")
 			private float fskConfidenceSearchLimit;
-	@Option(names = {"-a", "--auto-carrier"}, parameterConsumer = AutoDetectCarrierParameterConsumer.class,
-					defaultValue="0.0f")  private float carrierAutodetectThreshold;
-		private class AutoDetectCarrierParameterConsumer implements CommandLine.IParameterConsumer {
-			public void consumeParameters(Stack<String> args, CommandLine.Model.ArgSpec argSpec,
-										  CommandLine.Model.CommandSpec commandSpec) {
-				argSpec.setValue(0.01f);
-			}
-		};
+	@Option(names = {"-a", "--auto-carrier"}, parameterConsumer = AutoDetectCarrierParameterConsumer.class)
+	protected float carrierAutodetectThreshold = 0.0f;
+
 	@Option(names = {"-i", "--inverted"}) 									private boolean bfskInvertedFreqs;
 	static class DataBits {
 		@Option(names = {"-8", "--ascii"}, description = "ASCII  8-N-1") 	private boolean o8;
@@ -60,7 +57,7 @@ class Minimodem implements Callable<Integer> {
 	@Option(names = {"--startbits"}, paramLabel = "{n}", defaultValue = "-1")				private int bfskNStartBits;
 	@Option(names = {"--stopbits"},	paramLabel = "{n.n}", defaultValue = "-1.0f") 			private float bfskNStopBits;
 	@Option(names = {"--invert-start-stop"})								private boolean oInvertStartStop;
-	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}", defaultValue = "0xFF")			private Byte bfskSyncByte;
+	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}", defaultValue = "-1")			private Byte bfskSyncByte;
 	@Option(names = {"-q", "--quiet"})										private boolean oQuite;
 	@Option(names = {"-A", "--alsa"}, arity = "0..1",
 			paramLabel = "{plughw:X,Y}", fallbackValue = "")				private String oALSA;
@@ -95,22 +92,16 @@ class Minimodem implements Callable<Integer> {
 	private int bfskNDataBits = 0;
 	private float bandWidth = 0.0f;
 	private int txLeaderBitsLen = 2;
+	private byte[] expectDataString = null;
+	private byte[] expectSyncString = null;
+	private int expectNBits;
+	private int autodetectShift;
 
 	@Override
 	public Integer call() {
-		int txMode = -1;
 		int quietMode = 0;
 		int outputPrintFilter = 0;
-		int bfskNStartBits = -1;
-		int bfskMsbFirst = 0;
-		int expectNBits_U;
 		int invertStartStop = 0;
-		int autodetectShift;
-		byte[] expectDataString = null;
-		byte[] expectSyncString = null;
-
-
-		float carrierAutodetectThreshold = 0.0f;
 
 		int cfgRc = configure();
 		if (cfgRc != 0) {
@@ -173,7 +164,7 @@ class Minimodem implements Callable<Integer> {
 			bfskSpaceF = 1562.5f;
 			bandWidth = bfskDataRate;
 		} else if(modemMode.equalsIgnoreCase("caller")) {
-			if(txMode != RECEEVE) {
+			if(txMode != TXMODE.RECEIVE) {
 				fLogger.fatal ("callerid --tx mode is not supported.");
 				return 1;
 			}
@@ -183,7 +174,7 @@ class Minimodem implements Callable<Integer> {
 			bfskDataRate = 1200f;
 			bfskNDataBits = 8;
 		} else if(modemMode.equalsIgnoreCase("uic")) {
-			if(txMode != RECEIVE) {
+			if(txMode != TXMODE.RECEIVE) {
 				fLogger.fatal ("uic-751-3 --tx mode is not supported.");
 				return 1;
 			}
@@ -197,7 +188,7 @@ class Minimodem implements Callable<Integer> {
 			bfskNStopBits = 0;
 
 			expectDataString = "11110010ddddddddddddddddddddddddddddddddddddddd\0".getBytes();
-			expectNBits_U = 47;
+			expectNBits = 47;
 		} else if(modemMode.equalsIgnoreCase("V.21")) {
 			bfskDataRate = 300;
 			bfskMarkF = 980f;
