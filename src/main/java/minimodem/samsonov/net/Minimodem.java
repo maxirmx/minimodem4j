@@ -116,7 +116,7 @@ class Minimodem implements Callable<Integer> {
 		fLogger.error("We've just greeted the user!");
 		fLogger.fatal("We've just greeted the user!");
 
-		EncoderDecoder e = new DatabitsBaudot();
+		IEncodeDecode e = new DatabitsBaudot();
 		int[] db = new int[2];
 		int rb = e.encode(db, (byte)'A');
 		rb = e.encode(db, (byte)0x12);

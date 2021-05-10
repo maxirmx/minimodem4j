@@ -5,7 +5,7 @@
  */
 package minimodem.samsonov.net;
 
-public class DatabitsAscii8 implements EncoderDecoder {
+public class DatabitsAscii8 implements IEncodeDecode {
      /**
        * returns the number of datawords stuffed into *databitsOutp  (==1)
 	   */

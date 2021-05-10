@@ -1,9 +1,19 @@
+/**
+ * DatabitsCallerId.java
+ * Created from databits_callerid.c, databits.h @ https://github.com/kamalmostafa/minimodem
+ * Decoder !!! ONLY !!!
+ * This is high-level semantic decoder, so it first builds a string and then converts it to byte array
+ */
+
 package minimodem.samsonov.net;
+
+import java.nio.charset.StandardCharsets;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class DatabitsCallerId implements EncoderDecoder{
+
+public class DatabitsCallerId implements IEncodeDecode {
     private static final Logger fLogger = LogManager.getFormatterLogger("DatabitsCallerId");
 
     private final static int _MSG_MDMF = 0x80;
@@ -15,116 +25,122 @@ public class DatabitsCallerId implements EncoderDecoder{
     private final static int _DATA_NAME     = 0x07;
     private final static int _DATA_NAME_NA  = 0x08;
 
+    // Datatype names have been adjusted to match original "%-6s " sprintf format specification
     private final static String[] datatypeNames = {
-            "unknown0:",
-            "Time:",
-            "Phone:",
-            "unknown3:",
-            "Phone:",
-            "unknown5:",
-            "unknown6:",
-            "Name:",
-            "Name:"
+            "unkn0: ",
+            "Time:  ",
+            "Phone: ",
+            "unkn3: ",
+            "Phone: ",
+            "unkn5: ",
+            "unkn6: ",
+            "Name:  ",
+            "Name:  "
     };
 
     private int msgType     = 0;
     private int nData       = 0;
     private byte[] buffer   = new byte[256];
 
+    private String nbToStr (int p, int n) {
+        String rs = Byte.toString(buffer[p]);
+        for (int i=1; i<n; i++) {
+            rs += (char)buffer[p+i];
+        }
+        return rs;
+    }
 
-    private int decodeMdmfCallerid_U(byte[] dataoutP, int dataoutSize_U) {
-        int dataoutN_U = 0;
-        int cidI_U = 0;
-        int cidMsglen_U = Byte.toUnsignedInt(buffer.get(1));
+    private String decodeMdmfCallerid() {
+        String rs = "";
+        int cidI = 0;
+        int m = 1;
+        int cidMsglen = Byte.toUnsignedInt(buffer[m++]);
 
-        String8 m_U = buffer.shift(2);
-        while (Integer.compareUnsigned(cidI_U, cidMsglen_U) < 0) {
-            int cidDatatype_U = Byte.toUnsignedInt((m_U = nnc(m_U).shift(1)).get(-1));
-            if (Integer.compareUnsigned(cidDatatype_U, _DATA_NAME_NA) > 0) {
-                // FIXME: bad datastream -- print something here
-                return 0;
+        while (cidI < cidMsglen) {
+            int cidDatatype = Byte.toUnsignedInt(buffer[m++]);
+            if (cidDatatype > _DATA_NAME_NA) {
+                // Bad datastream -- print something here
+                fLogger.error("Invalid datatype [%d] decoded.", cidDatatype);
+                return "";
             }
 
-            int cidDatalen_U = Byte.toUnsignedInt((m_U = nnc(m_U).shift(1)).get(-1));
-            if (dataAddress(nnc(m_U).shift(2 + cidDatalen_U)) >= dataAddress(buffer.shift(buffer.size()))) {
+            int cidDatalen = Byte.toUnsignedInt(buffer[m++]);
+            if (m + cidDatalen + 2 > buffer.length) {
                 // FIXME: bad datastream -- print something here
-                return 0;
+                fLogger.error("Data length too big: m=%d, cidDatalen=%d, buffer.length=%d", m, cidDatalen, buffer.length);
+                return "";
             }
 
 
-            dataoutN_U += sprintf(nnc(dataoutP).shift(dataoutN_U), cs8("%-6s "), datatypeNames[cidDatatype_U]);
+            // From dataout_n += sprintf(dataout_p+dataout_n, "%-6s ",  cid_datatype_names[cid_datatype]);
+            rs += datatypeNames[cidDatatype];
 
-            int prlen = 0;
-            byte[] prdata = null;
-            switch(cidDatatype_U) {
+            switch (cidDatatype) {
                 case _DATA_DATETIME:
-                    dataoutN_U += sprintf(nnc(dataoutP).shift(dataoutN_U), cs8("%.2s/%.2s %.2s:%.2s\n"), m_U, nnc(m_U).shift(2), nnc(m_U).shift(4), nnc(m_U).shift(6));
+            // From dataout_n += sprintf(dataout_p+dataout_n, "%.2s/%.2s %.2s:%.2s\n", m+0, m+2, m+4, m+6);
+                    rs += nbToStr(m,2) + "/" + nbToStr(m+2,2) + nbToStr(m+4,2) + ":" + nbToStr(m+6,2) + "\n";
                     break;
                 case _DATA_PHONE:
-                    if(cidDatalen_U == 10) {
-                        dataoutN_U += sprintf(nnc(dataoutP).shift(dataoutN_U), cs8("%.3s-%.3s-%.4s\n"), m_U, nnc(m_U).shift(3), nnc(m_U).shift(6));
+                    if (cidDatalen == 10) {
+            // From dataout_n += sprintf(dataout_p+dataout_n, "%.3s-%.3s-%.4s\n", m+0, m+3, m+6);
+                        rs += nbToStr(m,3) + "-" + nbToStr(m+3,3) + nbToStr(m+6,4) + "\n";
                         break;
                     } else {
                         // fallthrough
+                        fLogger.warn("Skipping cidDatatype==DATA_PHONE with cidDatalen==%d", cidDatalen);
                     }
                 case _DATA_NAME:
-                    prdata = m_U;
-                    prdataIndex = mIndex;
-                    prlen = cidDatalen_U;
+                    rs += nbToStr(m,cidDatalen);
                     break;
                 case _DATA_PHONE_NA:
                 case _DATA_NAME_NA:
-                    if(cidDatalen_U == 1 && m_U[mIndex] == 'O') {
-                        prdata = "[N/A]\0".getBytes();
-                        prdataIndex = 0;
-                        prlen = 5;
-                    } else if(cidDatalen_U == 1 && m_U[mIndex] == 'P') {
-                        prdata = "[blocked]\0".getBytes();
-                        prdataIndex = 0;
-                        prlen = 9;
+                    if (cidDatalen == 1 && buffer[m] == 'O') {
+                        rs += "[N/A]";
+                    } else if (cidDatalen == 1 && buffer[m] == 'P') {
+                        rs += "[blocked]";
+                    } else {
+                        // fallthrough
+                        fLogger.warn("Skipping cidDatatype==DATA_PHONE_NA/DATA_NAME_NA with cidDatalen==%d and buffer[m]==%x", cidDatalen, buffer[m]);
                     }
                     break;
                 default:
+                    fLogger.error("Invalid datatype [%d] in processing.", cidDatatype);
                     // FIXME: warning here?
                     break;
             }
-            if(prdata != null) {
-                dataoutN_U += sprintf(nnc(dataoutP).shift(dataoutN_U), cs8("%.*s\n"), prlen, prdata);
-            }
 
-            mIndex += cidDatalen_U;
-            cidI_U += cidDatalen_U + 2;
+            m += cidDatalen;
+            cidI += cidDatalen + 2;
         }
 
-        return dataoutN_U;
+        return rs;
     }
 
-    private int decodeSdmfCallerid_U(String8 dataoutP, int dataoutSize_U) {
-        int dataoutN_U = 0;
-        int cidMsglen_U = Byte.toUnsignedInt(buffer.get(1));
+    private String decodeSdmfCallerid() {
+        String rs = "";
+        int m = 1;
+        int cidMsglen = Byte.toUnsignedInt(buffer[m++]);
 
-        String8 m_U = buffer.shift(2);
+        rs += datatypeNames[_DATA_DATETIME];
+        rs += nbToStr(m,2) + "/" + nbToStr(m+2,2) + nbToStr(m+4,2) + ":" + nbToStr(m+6,2) + "\n";
+        m += 8;
 
-        dataoutN_U += sprintf(nnc(dataoutP).shift(dataoutN_U), cs8("%-6s "), datatypeNames[_DATA_DATETIME]);
-        dataoutN_U += sprintf(nnc(dataoutP).shift(dataoutN_U), cs8("%.2s/%.2s %.2s:%.2s\n"), m_U, nnc(m_U).shift(2), nnc(m_U).shift(4), nnc(m_U).shift(6));
-        m_U = nnc(m_U).shift(8);
-
-        dataoutN_U += sprintf(nnc(dataoutP).shift(dataoutN_U), cs8("%-6s "), datatypeNames[_DATA_PHONE]);
-        int cidDatalen_U = cidMsglen_U - 8;
-        if(cidDatalen_U == 10) {
-            dataoutN_U += sprintf(nnc(dataoutP).shift(dataoutN_U), cs8("%.3s-%.3s-%.4s\n"), m_U, nnc(m_U).shift(3), nnc(m_U).shift(6));
+        rs += datatypeNames[_DATA_PHONE];
+        int cidDatalen = cidMsglen - 8;
+        if(cidDatalen == 10) {
+            rs += nbToStr(m,3) + "-" + nbToStr(m+3,3) + nbToStr(m+6,4) + "\n";
         } else {
-            dataoutN_U += sprintf(nnc(dataoutP).shift(dataoutN_U), cs8("%.*s\n"), cidDatalen_U, m_U);
+            rs += nbToStr(m, cidDatalen) + "\n";
         }
 
-        return dataoutN_U;
+        return rs;
     }
+
     private int decodeCidReset() {
         msgType = 0;
         nData = 0;
         return 0;
     }
-
 
     public int decode(byte[] dataoutP, int dataoutSize, long bits, int nDatabits) {
         if (dataoutP == null) { return decodeCidReset(); } /* databits processor reset */
@@ -139,6 +155,7 @@ public class DatabitsCallerId implements EncoderDecoder{
 
         if (Long.compareUnsigned(nData, (long) buffer.length) >= 0) {
             // FIXME? buffer overflow; do what here?
+            fLogger.error("Buffer overflow");
             return decodeCidReset();
         }
 
@@ -147,29 +164,26 @@ public class DatabitsCallerId implements EncoderDecoder{
         // Collect input bytes until we've collected as many as the message
         // length byte says there will be, plus two (the message type byte
         // and the checksum byte)
-        long cidMsglen_U = Byte.toUnsignedLong(buffer[1]);
-        if (Long.compareUnsigned(nData, cidMsglen_U + 2) < 0) {
+        long cidMsglen = Byte.toUnsignedLong(buffer[1]);
+        if (Long.compareUnsigned(nData, cidMsglen + 2) < 0) {
             return 0;
         }
         // Now we have a whole CID message in cid_buf[] -- decode it
 
         // FIXME: check the checksum
 
-        int dataoutN_U = 0;
+        String rs = "CALLER-ID\n";
 
-        dataoutN_U += sprintf(nnc(dataoutP).shift(dataoutN_U), cs8("CALLER-ID\n"));
-
-        if(msgType == _MSG_MDMF) {
-            dataoutN_U += decodeMdmfCallerid(nnc(dataoutP).shift(dataoutN_U), dataoutSize - dataoutN_U);
-        } else {
-            dataoutN_U += decodeSdmfCallerid(nnc(dataoutP).shift(dataoutN_U), dataoutSize - dataoutN_U);
-        }
+        if(msgType == _MSG_MDMF) {  rs += decodeMdmfCallerid(); }
+        else                     {  rs += decodeSdmfCallerid(); }
 
         // All done; reset for the next one
         decodeCidReset();
 
-        return dataoutN_U;
+        rs.getBytes(StandardCharsets.UTF_8);
+        System.arraycopy(rs.getBytes(StandardCharsets.UTF_8), 0, dataoutP, 0, rs.length());
 
+        return rs.length();
     }
 
     public int encode(int[] databitsOutp, byte charOut) {

@@ -6,7 +6,7 @@
 
 package minimodem.samsonov.net;
 
-public class DatabitsBaudot extends Baudot implements EncoderDecoder  {
+public class DatabitsBaudot extends Baudot implements IEncodeDecode {
     public int decode(byte[] dataoutP, int dataoutSize, long bits, int nDatabits) {
         if(dataoutP == null) {
             // databits processor reset: reset Baudot state
