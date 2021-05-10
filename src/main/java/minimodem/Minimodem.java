@@ -3,8 +3,7 @@ package minimodem;
 import java.io.File;
 import java.util.concurrent.Callable;
 
-import minimodem.helpers.AutoDetectCarrierParameterConsumer;
-import minimodem.helpers.*;
+import minimodem.arghelpers.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -37,8 +36,10 @@ class Minimodem implements Callable<Integer> {
 					"low performance, but higher decode quality, for noisy or hard-to-discern signals " +
 					"(Bell 103, or skewed rates).")
 			private float fskConfidenceSearchLimit;
-	@Option(names = {"-a", "--auto-carrier"}, parameterConsumer = AutoDetectCarrierParameterConsumer.class)
-	protected float carrierAutodetectThreshold = 0.0f;
+	@Option(names = {"-a", "--auto-carrier"},
+			parameterConsumer = AutoDetectCarrierParameterConsumer.class,
+			description = "Automatically detect mark and space frequencies from carrier.")
+			protected float carrierAutodetectThreshold = 0.0f;
 
 	@Option(names = {"-i", "--inverted"}) 									private boolean bfskInvertedFreqs;
 	static class DataBits {
@@ -50,18 +51,41 @@ class Minimodem implements Callable<Integer> {
 	@Option(names = {"-u", "--usos"},  paramLabel = "{0|1}") 				private int oUsos;
 	@Option(names = {"--msb-first"}) 										private boolean oMsbFirst;
 	@Option(names = {"-f", "--file"}, paramLabel = "{filename.flac}")       private File oFile;
-	@Option(names = {"-b", "--bandwidth"}, paramLabel = "{rx_bandwidth}") 	private float oBandwidth;
-	@Option(names = {"-v", "--volume"}, paramLabel = "{amplitude or 'E'}") 	private String oVolume;
-	@Option(names = {"-M", "--mark"}, paramLabel = "{mark_freq}", defaultValue = "0.0f") 	private float bfskMarkF;
-	@Option(names = {"-S", "--space"}, paramLabel = "{space_freq}", defaultValue = "0.0f")	private float bfskSpaceF;
-	@Option(names = {"--startbits"}, paramLabel = "{n}", defaultValue = "-1")				private int bfskNStartBits;
-	@Option(names = {"--stopbits"},	paramLabel = "{n.n}", defaultValue = "-1.0f") 			private float bfskNStopBits;
+	@Option(names = {"-b", "--bandwidth"}, paramLabel = "{rx_bandwidth}",
+			parameterConsumer = BandwidthParameterConsumer.class
+			)
+			protected float bandWidth = 0.0f;
+	@Option(names = {"-v", "--volume"}, paramLabel = "{amplitude or 'E'}",
+			parameterConsumer = VolumeParameterConsumer.class,
+			description = "Sets the generated signal amplitude (default is 1.0).  As a special case " +
+				"useful for testing, the value 'E' sets the amplitude to the very small value" +
+				"FLT_EPSILON.  (This option applies to --tx mode only).")
+			protected float txAmplitude = 1.0f;
+	@Option(names = {"-M", "--mark"}, paramLabel = "{mark_freq}",
+			description = "Sets the mark frequency. Shall be >0).",
+			parameterConsumer = MarkFreqParameterConsumer.class)
+		 	protected float bfskMarkF = 0.0f;
+	@Option(names = {"-S", "--space"}, paramLabel = "{space_freq}",
+			description = "Sets the space frequency. Shall be >0).",
+			parameterConsumer = SpaceFreqParameterConsumer.class)
+			protected float bfskSpaceF = 0.0f;
+	@Option(names = {"--startbits"}, paramLabel = "{n}",
+			description = "Sets the number of start bits (default is 1 for most baudmodes. Shall be <=20).",
+			parameterConsumer = NStartBitsParameterConsumer.class)
+			protected int bfskNStartBits = -1;
+	@Option(names = {"--stopbits"},	paramLabel = "{n.n}",
+			description = "Sets the number of stop bits (default is 1.0 for most baudmodes. Shall be >=0).",
+			parameterConsumer = NStopBitsParameterConsumer.class)
+			protected float bfskNStopBits = -1.0f;
 	@Option(names = {"--invert-start-stop"})								private boolean oInvertStartStop;
 	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}", defaultValue = "-1")			private Byte bfskSyncByte;
 	@Option(names = {"-q", "--quiet"})										private boolean oQuite;
 	@Option(names = {"-A", "--alsa"}, arity = "0..1", paramLabel = "{plughw:X,Y}")				private String oALSA;
 	@Option(names = {"-s", "sndio"}, arity = "0..1", paramLabel = "{device}")					private String oDevice;
-	@Option(names = {"-R", "--samplerate"}, paramLabel = "{rate}")			private int oSampleRate;
+	@Option(names = {"-R", "--samplerate"}, paramLabel = "{rate}",
+			description = "Set the audio sample rate (default rate is 48000 Hz).",
+			parameterConsumer = SampleRateParameterConsumer.class)
+			protected int sampleRate = 48000;
 	@Option(names = {"--lut"}, paramLabel = "{tx_sin_table_len}")			private int oLut;
 	@Option(names = {"--float-samples"})									private boolean oFloatSamples;
 	@Option(names = {"--rx-one"})											private boolean oRxOne;
@@ -89,7 +113,6 @@ class Minimodem implements Callable<Integer> {
 	private boolean	bfskDoRxSync = false;
 	private int bfskDoTxSyncBytes = 0;
 	private int bfskNDataBits = 0;
-	private float bandWidth = 0.0f;
 	private int txLeaderBitsLen = 2;
 	private byte[] expectDataString = null;
 	private byte[] expectSyncString = null;

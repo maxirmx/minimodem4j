@@ -1,4 +1,4 @@
-package minimodem.helpers;
+package minimodem.arghelpers;
 
 import java.util.Stack;
 import picocli.CommandLine;
@@ -8,4 +8,4 @@ public class AutoDetectCarrierParameterConsumer implements CommandLine.IParamete
                                   CommandLine.Model.CommandSpec commandSpec) {
         argSpec.setValue(0.001f);
     }
-};
+}
