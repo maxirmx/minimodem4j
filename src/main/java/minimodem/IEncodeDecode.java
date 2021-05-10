@@ -1,4 +1,4 @@
-package minimodem.samsonov.net;
+package minimodem;
 
 public interface IEncodeDecode {
     public int encode(int[] databitsOutp, byte charOut);

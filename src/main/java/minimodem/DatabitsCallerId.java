@@ -5,7 +5,7 @@
  * This is high-level semantic decoder, so it first builds a string and then converts it to byte array
  */
 
-package minimodem.samsonov.net;
+package minimodem;
 
 import java.nio.charset.StandardCharsets;
 

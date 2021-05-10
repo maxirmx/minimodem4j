@@ -1,4 +1,4 @@
-package minimodem.samsonov.net;
+package minimodem;
 
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +31,7 @@ public class CommandLineTest
         assert minimodem.carrierAutodetectThreshold == 0.0f;
         final String[] args1 = {"--tx", "-a", "300"};
         minimodem = processCmdLine(args1);
-        assert minimodem.carrierAutodetectThreshold == 0.01f;
+        assert minimodem.carrierAutodetectThreshold == 0.001f;
     }
 }
 

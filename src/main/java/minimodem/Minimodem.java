@@ -1,10 +1,10 @@
-package minimodem.samsonov.net;
+package minimodem;
 
 import java.io.File;
-import java.util.Stack;
 import java.util.concurrent.Callable;
 
-import minimodem.samsonov.net.helpers.*;
+import minimodem.helpers.AutoDetectCarrierParameterConsumer;
+import minimodem.helpers.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

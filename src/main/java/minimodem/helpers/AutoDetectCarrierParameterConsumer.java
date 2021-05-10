@@ -1,4 +1,4 @@
-package minimodem.samsonov.net.helpers;
+package minimodem.helpers;
 
 import java.util.Stack;
 import picocli.CommandLine;

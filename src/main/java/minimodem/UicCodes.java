@@ -3,7 +3,7 @@
  * Created from uic_codes.c, uic_codes.h @ https://github.com/kamalmostafa/minimodem
  */
 
-package minimodem.samsonov.net;
+package minimodem;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

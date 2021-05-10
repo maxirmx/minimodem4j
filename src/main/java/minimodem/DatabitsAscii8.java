@@ -3,7 +3,7 @@
  * Created from databits_ascii.c, databits.h @ https://github.com/kamalmostafa/minimodem
  * ASCII 8-bit data databits decoder/encoder (passthrough)
  */
-package minimodem.samsonov.net;
+package minimodem;
 
 public class DatabitsAscii8 implements IEncodeDecode {
      /**
