@@ -22,9 +22,9 @@ class Minimodem implements Callable<Integer> {
 		@Option(names = {"-t", "--tx", "--transmit", "--write"}, required = true) 		private boolean oTransmit;
 		@Option(names = {"-r", "--rx", "--receive", "--read"}, required = true) 		private boolean oReceive;
 	}
-	@CommandLine.ArgGroup(exclusive = true, multiplicity = "1") 						private OpMode opMode;
+	@CommandLine.ArgGroup(multiplicity = "1") 						private OpMode opMode;
 
-	private enum TXMODE { UNKNOWN, RECEIVE, TRANSMIT };
+	private enum TXMODE { UNKNOWN, RECEIVE, TRANSMIT }
 	protected TXMODE txMode;
 
 	@Option(names = {"-c", "--confidence"}, paramLabel = "{min-confidence-threshold}", defaultValue = "1.5f",
@@ -46,7 +46,7 @@ class Minimodem implements Callable<Integer> {
 		@Option(names = {"-7"}, description = "ASCII  7-N-1") 				private boolean o7;
 		@Option(names = {"-5", "--baudot"}, description = "Baudot  5-N-1") 	private boolean o5;
 	}
-	@CommandLine.ArgGroup(exclusive = true) 								DataBits oDatabits;
+	@CommandLine.ArgGroup() 								DataBits oDatabits;
 	@Option(names = {"-u", "--usos"},  paramLabel = "{0|1}") 				private int oUsos;
 	@Option(names = {"--msb-first"}) 										private boolean oMsbFirst;
 	@Option(names = {"-f", "--file"}, paramLabel = "{filename.flac}")       private File oFile;
@@ -59,10 +59,8 @@ class Minimodem implements Callable<Integer> {
 	@Option(names = {"--invert-start-stop"})								private boolean oInvertStartStop;
 	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}", defaultValue = "-1")			private Byte bfskSyncByte;
 	@Option(names = {"-q", "--quiet"})										private boolean oQuite;
-	@Option(names = {"-A", "--alsa"}, arity = "0..1",
-			paramLabel = "{plughw:X,Y}", fallbackValue = "")				private String oALSA;
-	@Option(names = {"-s", "sndio"}, arity = "0..1",
-			paramLabel = "{device}", fallbackValue = "")					private String oDevice;
+	@Option(names = {"-A", "--alsa"}, arity = "0..1", paramLabel = "{plughw:X,Y}")				private String oALSA;
+	@Option(names = {"-s", "sndio"}, arity = "0..1", paramLabel = "{device}")					private String oDevice;
 	@Option(names = {"-R", "--samplerate"}, paramLabel = "{rate}")			private int oSampleRate;
 	@Option(names = {"--lut"}, paramLabel = "{tx_sin_table_len}")			private int oLut;
 	@Option(names = {"--float-samples"})									private boolean oFloatSamples;
@@ -75,7 +73,8 @@ class Minimodem implements Callable<Integer> {
 	@Option(names = {"--Xrxnoise"}, paramLabel = "{rx-noise-factor}")		private boolean oXrxNoise;
 	@Option(names = {"--tx-carrier"})										private boolean oTxCarrier;
 
-	@Parameters(index = "0", paramLabel = "{baudmod}", description =
+	@Parameters(index = "0", paramLabel = "{baudmod}",
+			description =
 		"   any_number_N       Bell-like      N bps --ascii%n" +
 		"		    1200       Bell202     1200 bps --ascii%n" +
 		"		     300       Bell103      300 bps --ascii%n" +
