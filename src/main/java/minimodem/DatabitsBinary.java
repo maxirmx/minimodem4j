@@ -4,7 +4,7 @@
  * Rawbits N-bit binary data decoder !!! ONLY !!!
  */
 
-package minimodem.samsonov.net;
+package minimodem;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

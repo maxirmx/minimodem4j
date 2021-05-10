@@ -2,7 +2,7 @@
  * Baudot.java
  * Created from baudot.c, baudot.h @ https://github.com/kamalmostafa/minimodem
  */
-package minimodem.samsonov.net;
+package minimodem;
 
 import java.lang.Character;
 import org.apache.logging.log4j.LogManager;

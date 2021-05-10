@@ -4,7 +4,7 @@
   * Baudot 5-bit data databits decoder/encoder
   */
 
-package minimodem.samsonov.net;
+package minimodem;
 
 public class DatabitsBaudot extends Baudot implements IEncodeDecode {
     public int decode(byte[] dataoutP, int dataoutSize, long bits, int nDatabits) {

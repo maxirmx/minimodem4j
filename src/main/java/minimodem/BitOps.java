@@ -1,4 +1,4 @@
-package minimodem.samsonov.net;
+package minimodem;
 
 public class BitOps {
     /**
