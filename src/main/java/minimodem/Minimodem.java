@@ -4,6 +4,9 @@ import java.io.File;
 import java.util.concurrent.Callable;
 
 import minimodem.arghelpers.*;
+import minimodem.databits.Ascii8;
+import minimodem.databits.Baudot;
+import minimodem.databits.IEncodeDecode;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -12,8 +15,8 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
-@Command(name = "minimodem", mixinStandardHelpOptions = true, version = "Version: j.0.0.1",
-		description = "Minimodem Java port", usageHelpWidth = 100)
+@Command(name = "minimodem4j", mixinStandardHelpOptions = true, version = "Version: 0.0.1",
+		description = "Minimodem Java port", usageHelpWidth = 120)
 class Minimodem implements Callable<Integer> {
 	private static final Logger fLogger = LogManager.getFormatterLogger("Minimodem");
 
@@ -139,12 +142,12 @@ class Minimodem implements Callable<Integer> {
 		fLogger.error("We've just greeted the user!");
 		fLogger.fatal("We've just greeted the user!");
 
-		IEncodeDecode e = new DatabitsBaudot();
+		IEncodeDecode e = new Baudot();
 		int[] db = new int[2];
 		int rb = e.encode(db, (byte)'A');
 		rb = e.encode(db, (byte)0x12);
 
-		e = new DatabitsAscii8();
+		e = new Ascii8();
 		int rd = e.encode(db, (byte)'A');
 
 		return 0;

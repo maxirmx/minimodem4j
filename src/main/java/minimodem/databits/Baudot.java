@@ -1,18 +1,18 @@
 /**
  * Baudot.java
- * Created from baudot.c, baudot.h @ https://github.com/kamalmostafa/minimodem
+ * Created from databits_baudot.c, databits.h, baudot.c, baudot.h @ https://github.com/kamalmostafa/minimodem
  */
-package minimodem;
+package minimodem.databits;
 
 import java.lang.Character;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-
-public class Baudot {
+public class Baudot implements IEncodeDecode {
     private static final Logger fLogger = LogManager.getFormatterLogger("Baudot");
 
-    private final static byte[/* 32 */][/* 3 */] _decodeTable =
+    private final static byte[/* 32 */][/* 3 */] decodeTable =
             {       /* letter, U.S. figs, CCITT No.2 figs (Europe) */
                     {'_', '^', '^'} /* NUL (underscore and caret marks for debugging) */,
                     {'E', '3', '3'},
@@ -48,7 +48,7 @@ public class Baudot {
                     {'%', '%', '%'} /* LTRS (symbol % for debug; won't be printed) */
             };
 
-    private static final byte[/* 0x60 */][ /* 3 */] _encodeTable =
+    private static final byte[/* 0x60 */][ /* 3 */] encodeTable =
             {
                   /* index: ascii char; values: bits, ltrs_or_figs_or_neither_or_both */
                   /* 0x00 */
@@ -161,11 +161,11 @@ public class Baudot {
      * 1 LTRS state
      * 2 FIGS state
      */
-    private final static int _LTRS  = 0x1F;
-    private final static int _FIGS  = 0x1B;
-    private final static int _SPACE = 0x04;
+    private final static int LTRS = 0x1F;
+    private final static int FIGS = 0x1B;
+    private final static int SPACE = 0x04;
 
-    private int _charset = 0;       /* FIXME */
+    private int charset = 0;       /* FIXME */
 
     /**
      * UnShift on space
@@ -173,7 +173,7 @@ public class Baudot {
     public int unshiftOnSpace = 1;
 
     public void reset() {
-        _charset = 1;
+        charset = 1;
     }
 
     /**
@@ -181,27 +181,27 @@ public class Baudot {
      * or 0 if no output character was stuffed (in other words, returns
      * the count of characters decoded and stuffed).
      */
-    public int decode(byte[] charOutp, byte databits) {
+    private int decodeInternal(byte[] charOutp, byte databits) {
         /* Baudot (RTTY) */
         assert (Byte.toUnsignedInt(databits) & ~0x1F) == 0;
 
         int stuffChar = 1;
-        if (Byte.toUnsignedInt(databits) == _FIGS) {
-            _charset = 2;
+        if (Byte.toUnsignedInt(databits) == FIGS) {
+            charset = 2;
             stuffChar = 0;
-        } else if (Byte.toUnsignedInt(databits) == _LTRS) {
-            _charset = 1;
+        } else if (Byte.toUnsignedInt(databits) == LTRS) {
+            charset = 1;
             stuffChar = 0;
-        } else if (Byte.toUnsignedInt(databits) == _SPACE && (unshiftOnSpace != 0)) {
+        } else if (Byte.toUnsignedInt(databits) == SPACE && (unshiftOnSpace != 0)) {
             /* RX un-shift on space */
-            _charset = 1;
+            charset = 1;
         }
         if (stuffChar != 0) {
             int t;
-            if (_charset == 1) { t = 0; }
+            if (charset == 1) { t = 0; }
             else                     { t = 1; }  // U.S. figs
                                     // t = 2;	// CCITT figs
-            charOutp[0] = _decodeTable[Byte.toUnsignedInt(databits)][t];
+            charOutp[0] = decodeTable[Byte.toUnsignedInt(databits)][t];
         }
         return stuffChar;
     }
@@ -211,14 +211,24 @@ public class Baudot {
      * Emits warning message on non-encodable character
      */
 
-    private void _skipWarning(byte charOut) {
+    private void skipWarning(byte charOut) {
         fLogger.warn("Skipping non-encodable character '%c' 0x%02x", (char)Byte.toUnsignedInt(charOut), Byte.toUnsignedInt(charOut));
     }
 
-    private void _fatalError(byte charOut) {
+    private void fatalError(byte charOut) {
         fLogger.fatal("Input character failed '%c' 0x%02x", (char)Byte.toUnsignedInt(charOut), charOut);
-        fLogger.fatal("_charset==" + Integer.toUnsignedString(_charset));
+        fLogger.fatal("_charset==" + Integer.toUnsignedString(charset));
         System.exit(-1);
+    }
+
+    public int decode(byte[] dataoutP, int dataoutSize, long bits, int nDatabits) {
+        if(dataoutP == null) {
+            // databits processor reset: reset Baudot state
+            reset();
+            return 0;
+        }
+        bits &= 0x1F;
+        return decodeInternal(dataoutP, (byte) bits);
     }
 
     /**
@@ -227,7 +237,7 @@ public class Baudot {
     public int encode(int[] databitsOutp, byte charOut) {
         charOut = (byte)Character.toUpperCase(charOut);
         if(charOut >= 0x60 || charOut < 0) {
-            _skipWarning(charOut);
+            skipWarning(charOut);
             return 0;
         }
 
@@ -235,34 +245,34 @@ public class Baudot {
 
         int n = 0;
 
-        byte charsetMask = _encodeTable[Byte.toUnsignedInt(ind)][1];
+        byte charsetMask = encodeTable[Byte.toUnsignedInt(ind)][1];
 
-        fLogger.trace("(_charset==%d)   input character '%c' 0x%02x charsetMask=%d", _charset, charOut, charOut, charsetMask);
+        fLogger.trace("(_charset==%d)   input character '%c' 0x%02x charsetMask=%d", charset, charOut, charOut, charsetMask);
 
-        if ((_charset & Byte.toUnsignedInt(charsetMask)) == 0) {
+        if ((charset & Byte.toUnsignedInt(charsetMask)) == 0) {
             if (Byte.toUnsignedInt(charsetMask) == 0) {
-                _skipWarning(charOut);
+                skipWarning(charOut);
                 return 0;
             }
 
-            if (_charset == 0) { _charset = 1; }
+            if (charset == 0) { charset = 1; }
 
-            if (Byte.toUnsignedInt(charsetMask) != 3) { _charset = Byte.toUnsignedInt(charsetMask); }
+            if (Byte.toUnsignedInt(charsetMask) != 3) { charset = Byte.toUnsignedInt(charsetMask); }
 
-            if      (_charset == 1)      {  databitsOutp[n++] = _LTRS; }
-            else if (_charset == 2)      {  databitsOutp[n++] = _FIGS; }
-            else    { _fatalError(charOut); }
+            if      (charset == 1)      {  databitsOutp[n++] = LTRS; }
+            else if (charset == 2)      {  databitsOutp[n++] = FIGS; }
+            else    { fatalError(charOut); }
             fLogger.trace("emit charset select 0x%02x", databitsOutp[n - 1]);
         }
 
-        if(!(_charset == 1 || _charset == 2)) { _fatalError(charOut); }
+        if(!(charset == 1 || charset == 2)) { fatalError(charOut); }
 
 
-        databitsOutp[n++] = _encodeTable[Byte.toUnsignedInt(ind)][0];
+        databitsOutp[n++] = encodeTable[Byte.toUnsignedInt(ind)][0];
 
         /* TX un-shift on space */
         if(charOut == ' ' && (unshiftOnSpace !=0)) {
-            _charset = 1;
+            charset = 1;
         }
 
         return n;

@@ -5,7 +5,7 @@
  * This is high-level semantic decoder, so it first builds a string and then converts it to byte array
  */
 
-package minimodem;
+package minimodem.databits;
 
 import java.nio.charset.StandardCharsets;
 
@@ -13,7 +13,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 
-public class DatabitsCallerId implements IEncodeDecode {
+public class CallerId implements IEncodeDecode {
     private static final Logger fLogger = LogManager.getFormatterLogger("DatabitsCallerId");
 
     private final static int _MSG_MDMF = 0x80;
@@ -153,7 +153,7 @@ public class DatabitsCallerId implements IEncodeDecode {
             return 0;
         }
 
-        if (Long.compareUnsigned(nData, (long) buffer.length) >= 0) {
+        if (nData > buffer.length) {
             // FIXME? buffer overflow; do what here?
             fLogger.error("Buffer overflow");
             return decodeCidReset();

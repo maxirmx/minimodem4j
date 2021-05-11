@@ -1,4 +1,4 @@
-package minimodem;
+package minimodem.databits;
 
 public interface IEncodeDecode {
     public int encode(int[] databitsOutp, byte charOut);

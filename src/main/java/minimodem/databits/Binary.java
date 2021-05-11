@@ -4,12 +4,12 @@
  * Rawbits N-bit binary data decoder !!! ONLY !!!
  */
 
-package minimodem;
+package minimodem.databits;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class DatabitsBinary implements IEncodeDecode {
+public class Binary implements IEncodeDecode {
 
     private static final Logger fLogger = LogManager.getFormatterLogger("DatabitsBinary");
     /**
