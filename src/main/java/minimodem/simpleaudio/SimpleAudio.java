@@ -14,7 +14,8 @@ public class SimpleAudio {
      */
     private float rxnoise;
 
-    public SimpleAudio() {
+    public SimpleAudio(SaStreamFormat fmt) {
+        format = fmt;
     }
 
     public SaStreamFormat getFormat() {

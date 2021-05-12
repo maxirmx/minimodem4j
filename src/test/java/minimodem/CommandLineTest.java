@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import picocli.CommandLine;
 
 /**
- * Unit tests for minimodem app.
+ * Unit tests for picocli implementation.
  */
 public class CommandLineTest
 {

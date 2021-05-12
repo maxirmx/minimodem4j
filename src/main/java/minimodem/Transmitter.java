@@ -11,7 +11,7 @@ public class Transmitter {
     private SimpleAudio txSaOut;                // Output stream
     private static int txFlushNsamples = 0;
 
-    public boolean txTransmitting = false;
+    public int txTransmitting = 0;
     public static boolean txPrintEot = false;
     public static int txLeaderBitsLen = 2;
     public static int txTrailerBitsLen = 2;
@@ -66,8 +66,8 @@ public class Transmitter {
             int nwords_U;
             int[] bits_U = new int[2];
 
-            if(!txTransmitting) {
-                txTransmitting = true;
+            if(txTransmitting == 0) {
+                txTransmitting = 1;
                 /* emit leader tone (mark) */
                 for(int j_U = 0; Integer.compareUnsigned(j_U, txLeaderBitsLen) < 0; j_U++) {
                     toneGenerator.Tone(txSaOut, invertStartStop != 0 ? bfskSpaceF : bfskMarkF, bitNsamples);
@@ -84,13 +84,13 @@ public class Transmitter {
             }
 
             /* emit data bits */
-            for(int j_U = 0; Integer.compareUnsigned(j_U, nwords_U) < 0; j_U++) {
-                fskTransmitFrame(bits_U[j_U], nDataBits, bitNsamples, bfskMarkF, bfskSpaceF, bfskNstartbits, bfskNstopbits, invertStartStop, bfskMsbFirst);
-            }
-        } else {
-        txTransmitting = true;
+//            for(int j_U = 0; Integer.compareUnsigned(j_U, nwords_U) < 0; j_U++) {
+//                fskTransmitFrame(bits_U[j_U], nDataBits, bitNsamples, bfskMarkF, bfskSpaceF, bfskNstartbits, bfskNstopbits, invertStartStop, bfskMsbFirst);
+//            }
+//        } else {
+        txTransmitting = 1;
         /* emit idle tone (mark) */
-            toneGenerator.Tone(txSaOut, invertStartStop != 0 ? bfskSpaceF : bfskMarkF, Long.divideUnsigned(Integer.toUnsignedLong(idleCarrierUsec_U) * sampleRate_U, 1_000_000));
+   //         toneGenerator.Tone(txSaOut, invertStartStop != 0 ? bfskSpaceF : bfskMarkF, Long.divideUnsigned(Integer.toUnsignedLong(idleCarrierUsec) * sampleRate, 1_000_000));
     }
 }
 
@@ -103,7 +103,7 @@ public class Transmitter {
             toneGenerator.Tone(txSaOut, 0, txFlushNsamples);
         }
 
-        txTransmitting = false;
+        txTransmitting = 0;
         if(txPrintEot) {
             fLogger.info("### EOT");
         }
