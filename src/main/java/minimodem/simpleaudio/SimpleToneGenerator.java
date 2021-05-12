@@ -120,15 +120,15 @@ public class SimpleToneGenerator {
                             shortBuf.put(sinLuShort(sinePhaseTurns(i, waveNsamples)));
                         }
                     } else {
-                        short magS_U = (short) (32767.0f * toneMag + 0.5f);
+                        short magS = (short) (32767.0f * toneMag + 0.5f);
                         if (toneMag > 1.0f) { /* clamp to 1.0 to avoid overflow */
-                            magS_U = 32767;
+                            magS = 32767;
                         }
-                        if (Short.toUnsignedInt(magS_U) < 1) { /* "short epsilon" */
-                            magS_U = 1;
+                        if (magS < 1) { /* "short epsilon" */
+                            magS = 1;
                         }
                         for (i = 0; i < nsamplesDur; i++) {
-                            shortBuf.put(lroundf((float) (magS_U * Math.sin(sinePhaseRadians(i, waveNsamples)))));
+                            shortBuf.put(lroundf((float) (magS * Math.sin(sinePhaseRadians(i, waveNsamples)))));
                         }
                     }
                     break;
@@ -138,7 +138,7 @@ public class SimpleToneGenerator {
                     // FIXME: warning here?
                     break;
             }
-            saToneCphase = (saToneCphase + Float.parseFloat(Long.toUnsignedString(nsamplesDur)) / waveNsamples) % 1.0f;
+            saToneCphase = (saToneCphase + nsamplesDur / waveNsamples) % 1.0f;
         } else {
             for (i = 0; i < nsamplesDur * framesize; i++) {
                 byteBuf.put((byte) 0);

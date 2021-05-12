@@ -8,24 +8,29 @@ import org.apache.logging.log4j.Logger;
 public class Transmitter {
     private static final Logger fLogger = LogManager.getFormatterLogger("Transmitter");
 
+    private SimpleAudio txSaOut;                // Output stream
+    private static int txFlushNsamples = 0;
+
     public boolean txTransmitting = false;
     public static boolean txPrintEot = false;
     public static int txLeaderBitsLen = 2;
     public static int txTrailerBitsLen = 2;
-    public static SimpleAudio txSaOut;
     public static float txBfskMarkF;
     public static int txBitNsamples_U;
-    public static int txFlushNsamples_U;
 
     private SimpleToneGenerator toneGenerator = new SimpleToneGenerator();
+
+    public Transmitter(SimpleAudio saOut) {
+        txSaOut = saOut;
+    }
 
     /**
      * rudimentary BFSK transmitter
      */
-    private void fskTransmitFrame(SimpleAudio saOut, int bits, int nDataBits, int bitNsamples, float bfskMarkF, float bfskSpaceF, float bfskNstartbits, float bfskNstopbits, int invertStartStop, int bfskMsbFirst) {
+    private void fskTransmitFrame(int bits, int nDataBits, int bitNsamples, float bfskMarkF, float bfskSpaceF, float bfskNstartbits, float bfskNstopbits, int invertStartStop, int bfskMsbFirst) {
         int i;
         if(bfskNstartbits > 0) {
-            toneGenerator.Tone(saOut, invertStartStop != 0 ? bfskMarkF : bfskSpaceF, (int) (bitNsamples * bfskNstartbits));
+            toneGenerator.Tone(txSaOut, invertStartStop != 0 ? bfskMarkF : bfskSpaceF, (int) (bitNsamples * bfskNstartbits));
         }
         for(i = 0; i<nDataBits; i++) {
             // data
@@ -37,22 +42,24 @@ public class Transmitter {
             }
 
             float toneFreq = bit_U == 1 ? bfskMarkF : bfskSpaceF;
-            toneGenerator.Tone(saOut, toneFreq, bitNsamples);
+            toneGenerator.Tone(txSaOut, toneFreq, bitNsamples);
         }
         if(bfskNstopbits > 0) {
-            toneGenerator.Tone(saOut, invertStartStop != 0 ? bfskSpaceF : bfskMarkF, (int) (bitNsamples * bfskNstopbits)); // stop
+            toneGenerator.Tone(txSaOut, invertStartStop != 0 ? bfskSpaceF : bfskMarkF, (int) (bitNsamples * bfskNstopbits)); // stop
         }
 
     }
 
-    private static void fskTransmitStdin(SimpleAudio saOut, int txInteractive, float dataRate, float bfskMarkF, float bfskSpaceF,
+    private void fskTransmitStdin(boolean txInteractive, float dataRate, float bfskMarkF, float bfskSpaceF,
                                          int nDataBits, float bfskNstartbits, float bfskNstopbits, int invertStartStop, int bfskMsbFirst,
                                          int bfskDoTxSyncBytes_U, int bfskSyncByte_U, IEncodeDecode encode, int txcarrier) {
-        long sampleRate_U = saOut.getRate();
-        long bitNsamples_U = (long)(Float.parseFloat(Long.toUnsignedString(sampleRate_U)) / dataRate + 0.5f);
-        SimpleAudio txSaOut = saOut;
         txBfskMarkF = bfskMarkF;
-        txBitNsamples = (int)bitNsamples_U;
+        int bitNsamples = (int) (txSaOut.getRate() / dataRate + 0.5f);
+        if ( txInteractive )
+            txFlushNsamples = txSaOut.getRate()/2; // 0.5 sec of zero samples to flush
+        else
+            txFlushNsamples = 0;
+
 
         boolean idle = false;
         if(!idle) {
@@ -63,7 +70,7 @@ public class Transmitter {
                 txTransmitting = true;
                 /* emit leader tone (mark) */
                 for(int j_U = 0; Integer.compareUnsigned(j_U, txLeaderBitsLen) < 0; j_U++) {
-                    simpleaudioTone(saOut, invertStartStop != 0 ? bfskSpaceF : bfskMarkF, bitNsamples_U);
+                    toneGenerator.Tone(txSaOut, invertStartStop != 0 ? bfskSpaceF : bfskMarkF, bitNsamples);
                 }
             }
 
@@ -71,19 +78,19 @@ public class Transmitter {
                 txTransmitting = 2;
                 /* emit "preamble" of sync bytes */
                 for(int j_U = 0; Integer.compareUnsigned(j_U, bfskDoTxSyncBytes_U) < 0; j_U++) {
-                    fskTransmitFrame(saOut, bfskSyncByte_U, nDataBits, bitNsamples_U, bfskMarkF, bfskSpaceF, bfskNstartbits, bfskNstopbits, invertStartStop, 0);
+                    fskTransmitFrame(bfskSyncByte_U, nDataBits, bitNsamples, bfskMarkF, bfskSpaceF, bfskNstartbits, bfskNstopbits, invertStartStop, 0);
                 }
 
             }
 
             /* emit data bits */
             for(int j_U = 0; Integer.compareUnsigned(j_U, nwords_U) < 0; j_U++) {
-                fskTransmitFrame(saOut, bits_U[j_U], nDataBits, bitNsamples_U, bfskMarkF, bfskSpaceF, bfskNstartbits, bfskNstopbits, invertStartStop, bfskMsbFirst);
+                fskTransmitFrame(bits_U[j_U], nDataBits, bitNsamples, bfskMarkF, bfskSpaceF, bfskNstartbits, bfskNstopbits, invertStartStop, bfskMsbFirst);
             }
         } else {
         txTransmitting = true;
         /* emit idle tone (mark) */
-        simpleaudioTone(saOut, invertStartStop != 0 ? bfskSpaceF : bfskMarkF, Long.divideUnsigned(Integer.toUnsignedLong(idleCarrierUsec_U) * sampleRate_U, 1_000_000));
+            toneGenerator.Tone(txSaOut, invertStartStop != 0 ? bfskSpaceF : bfskMarkF, Long.divideUnsigned(Integer.toUnsignedLong(idleCarrierUsec_U) * sampleRate_U, 1_000_000));
     }
 }
 
@@ -92,8 +99,8 @@ public class Transmitter {
             toneGenerator.Tone(txSaOut, txBfskMarkF, txBitNsamples_U);
         }
 
-        if(txFlushNsamples_U != 0) {
-            toneGenerator.Tone(txSaOut, 0, txFlushNsamples_U);
+        if(txFlushNsamples != 0) {
+            toneGenerator.Tone(txSaOut, 0, txFlushNsamples);
         }
 
         txTransmitting = false;
