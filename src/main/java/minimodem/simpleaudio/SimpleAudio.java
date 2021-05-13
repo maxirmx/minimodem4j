@@ -3,7 +3,6 @@ package minimodem.simpleaudio;
 import java.nio.ByteBuffer;
 
 public class SimpleAudio {
-    private SaStreamFormat format;
     private int rate;
     private int channels;
     //    private final Container<AbstractData> backendHandle = new Container<AbstractData>(this, 1){};
@@ -14,8 +13,13 @@ public class SimpleAudio {
      */
     private float rxnoise;
 
-    public SimpleAudio(SaStreamFormat fmt) {
+    protected SaStreamFormat format;
+    protected SaDirection direction;
+
+    protected SimpleAudio(SaStreamFormat fmt, SaDirection dir)
+    {
         format = fmt;
+        direction = dir;
     }
 
     public SaStreamFormat getFormat() {

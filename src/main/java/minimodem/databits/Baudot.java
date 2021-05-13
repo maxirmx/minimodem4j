@@ -183,7 +183,6 @@ public class Baudot implements IEncodeDecode {
      */
     private int decodeInternal(byte[] charOutp, byte databits) {
         /* Baudot (RTTY) */
-        assert (Byte.toUnsignedInt(databits) & ~0x1F) == 0;
 
         int stuffChar = 1;
         if (Byte.toUnsignedInt(databits) == FIGS) {
@@ -217,7 +216,7 @@ public class Baudot implements IEncodeDecode {
 
     private void fatalError(byte charOut) {
         fLogger.fatal("Input character failed '%c' 0x%02x", (char)Byte.toUnsignedInt(charOut), charOut);
-        fLogger.fatal("_charset==" + Integer.toUnsignedString(charset));
+        fLogger.fatal("charset==" + Integer.toUnsignedString(charset));
         System.exit(-1);
     }
 
@@ -227,8 +226,7 @@ public class Baudot implements IEncodeDecode {
             reset();
             return 0;
         }
-        bits &= 0x1F;
-        return decodeInternal(dataoutP, (byte) bits);
+        return decodeInternal(dataoutP, (byte) (bits & 0x1F));
     }
 
     /**
@@ -247,7 +245,7 @@ public class Baudot implements IEncodeDecode {
 
         byte charsetMask = encodeTable[Byte.toUnsignedInt(ind)][1];
 
-        fLogger.trace("(_charset==%d)   input character '%c' 0x%02x charsetMask=%d", charset, charOut, charOut, charsetMask);
+        fLogger.trace("(charset==%d)   input character '%c' 0x%02x charsetMask=%d", charset, charOut, charOut, charsetMask);
 
         if ((charset & Byte.toUnsignedInt(charsetMask)) == 0) {
             if (Byte.toUnsignedInt(charsetMask) == 0) {

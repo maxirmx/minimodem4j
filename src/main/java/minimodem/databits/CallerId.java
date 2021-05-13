@@ -16,14 +16,14 @@ import org.apache.logging.log4j.Logger;
 public class CallerId implements IEncodeDecode {
     private static final Logger fLogger = LogManager.getFormatterLogger("DatabitsCallerId");
 
-    private final static int _MSG_MDMF = 0x80;
-    private final static int _MSG_SDMF = 0x04;
+    private final static int MSG_MDMF = 0x80;
+    private final static int MSG_SDMF = 0x04;
 
-    private final static int _DATA_DATETIME = 0x01;
-    private final static int _DATA_PHONE    = 0x02;
-    private final static int _DATA_PHONE_NA = 0x04;
-    private final static int _DATA_NAME     = 0x07;
-    private final static int _DATA_NAME_NA  = 0x08;
+    private final static int DATA_DATETIME = 0x01;
+    private final static int DATA_PHONE = 0x02;
+    private final static int DATA_PHONE_NA = 0x04;
+    private final static int DATA_NAME = 0x07;
+    private final static int DATA_NAME_NA = 0x08;
 
     // Datatype names have been adjusted to match original "%-6s " sprintf format specification
     private final static String[] datatypeNames = {
@@ -58,7 +58,7 @@ public class CallerId implements IEncodeDecode {
 
         while (cidI < cidMsglen) {
             int cidDatatype = Byte.toUnsignedInt(buffer[m++]);
-            if (cidDatatype > _DATA_NAME_NA) {
+            if (cidDatatype > DATA_NAME_NA) {
                 // Bad datastream -- print something here
                 fLogger.error("Invalid datatype [%d] decoded.", cidDatatype);
                 return "";
@@ -76,11 +76,11 @@ public class CallerId implements IEncodeDecode {
             rs += datatypeNames[cidDatatype];
 
             switch (cidDatatype) {
-                case _DATA_DATETIME:
+                case DATA_DATETIME:
             // From dataout_n += sprintf(dataout_p+dataout_n, "%.2s/%.2s %.2s:%.2s\n", m+0, m+2, m+4, m+6);
                     rs += nbToStr(m,2) + "/" + nbToStr(m+2,2) + nbToStr(m+4,2) + ":" + nbToStr(m+6,2) + "\n";
                     break;
-                case _DATA_PHONE:
+                case DATA_PHONE:
                     if (cidDatalen == 10) {
             // From dataout_n += sprintf(dataout_p+dataout_n, "%.3s-%.3s-%.4s\n", m+0, m+3, m+6);
                         rs += nbToStr(m,3) + "-" + nbToStr(m+3,3) + nbToStr(m+6,4) + "\n";
@@ -89,11 +89,11 @@ public class CallerId implements IEncodeDecode {
                         // fallthrough
                         fLogger.warn("Skipping cidDatatype==DATA_PHONE with cidDatalen==%d", cidDatalen);
                     }
-                case _DATA_NAME:
+                case DATA_NAME:
                     rs += nbToStr(m,cidDatalen);
                     break;
-                case _DATA_PHONE_NA:
-                case _DATA_NAME_NA:
+                case DATA_PHONE_NA:
+                case DATA_NAME_NA:
                     if (cidDatalen == 1 && buffer[m] == 'O') {
                         rs += "[N/A]";
                     } else if (cidDatalen == 1 && buffer[m] == 'P') {
@@ -121,11 +121,11 @@ public class CallerId implements IEncodeDecode {
         int m = 1;
         int cidMsglen = Byte.toUnsignedInt(buffer[m++]);
 
-        rs += datatypeNames[_DATA_DATETIME];
+        rs += datatypeNames[DATA_DATETIME];
         rs += nbToStr(m,2) + "/" + nbToStr(m+2,2) + nbToStr(m+4,2) + ":" + nbToStr(m+6,2) + "\n";
         m += 8;
 
-        rs += datatypeNames[_DATA_PHONE];
+        rs += datatypeNames[DATA_PHONE];
         int cidDatalen = cidMsglen - 8;
         if(cidDatalen == 10) {
             rs += nbToStr(m,3) + "-" + nbToStr(m+3,3) + nbToStr(m+6,4) + "\n";
@@ -146,8 +146,8 @@ public class CallerId implements IEncodeDecode {
         if (dataoutP == null) { return decodeCidReset(); } /* databits processor reset */
 
         if (msgType == 0) {
-            if (bits == _MSG_MDMF)      { msgType = _MSG_MDMF; }
-            else if (bits == _MSG_SDMF) { msgType = _MSG_SDMF; }
+            if (bits == MSG_MDMF)      { msgType = MSG_MDMF; }
+            else if (bits == MSG_SDMF) { msgType = MSG_SDMF; }
             else                        { return 0;            }
             buffer[nData++] = (byte) bits;
             return 0;
@@ -174,7 +174,7 @@ public class CallerId implements IEncodeDecode {
 
         String rs = "CALLER-ID\n";
 
-        if(msgType == _MSG_MDMF) {  rs += decodeMdmfCallerid(); }
+        if(msgType == MSG_MDMF) {  rs += decodeMdmfCallerid(); }
         else                     {  rs += decodeSdmfCallerid(); }
 
         // All done; reset for the next one
