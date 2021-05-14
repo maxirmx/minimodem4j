@@ -52,7 +52,7 @@ class Minimodem implements Callable<Integer> {
 	}
 	@CommandLine.ArgGroup() 								DataBits oDatabits;
 	@Option(names = {"-u", "--usos"},  paramLabel = "{0|1}") 				private int oUsos;
-	@Option(names = {"--msb-first"}) 										private boolean oMsbFirst;
+	@Option(names = {"--msb-first"}) 										private boolean bfskMsbFirst;
 	@Option(names = {"-f", "--file"}, paramLabel = "{filename.flac}")       private File oFile;
 	@Option(names = {"-b", "--bandwidth"}, paramLabel = "{rx_bandwidth}",
 			parameterConsumer = BandwidthParameterConsumer.class

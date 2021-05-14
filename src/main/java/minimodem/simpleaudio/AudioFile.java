@@ -15,25 +15,88 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
-import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
 import static minimodem.simpleaudio.SaDirection.*;
 
 
 public class AudioFile extends SimpleAudio {
     private static final Logger fLogger = LogManager.getFormatterLogger("AudioFile");
 
+    protected SaDirection direction;
     protected AudioFileFormat.Type type = null;
     protected File fTmpOut = null;
     protected File fOut = null;
     protected FileChannel fTmpChannel = null;
 
-    public AudioFile(SaStreamFormat fmt, SaDirection dir) {
-        super(fmt, dir);
+    public boolean open(File f, AudioFormat.Encoding enc, SaDirection dir, int sampleRate, int nChannels, boolean bfskMsbFirst) {
+        clean();
+        direction = dir;
+        fOut = f;
+        String ext = FilenameUtils.getExtension(f.getName());
+        AudioFileFormat.Type[] types = AudioSystem.getAudioFileTypes();
+        for (AudioFileFormat.Type value : types) {
+            if (ext.equalsIgnoreCase(value.getExtension())) {
+                type = value;
+                break;
+            }
+        }
+        if (type == null) {
+            fLogger.error("Audio file extension '%s' is not supported", ext);
+            return false;
+        }
+
+        if (direction == SA_STREAM_RECORD) {
+            try {
+                fTmpOut = File.createTempFile("minimodem-", ".tmp");
+                fTmpChannel = new FileOutputStream(fTmpOut, false).getChannel();
+            } catch (IOException ex) {
+                fLogger.error("Failed to create temporary buffer file '%s'", fTmpOut.getPath());
+                clean();
+                return false;
+            }
+        }
+
+        return super.open(enc, dir, sampleRate, nChannels, bfskMsbFirst);
     }
 
+    public boolean close()
+    {
+        try {
+            fTmpChannel.close();
+            FileInputStream fInStream = new FileInputStream(fTmpOut);
+            AudioInputStream aStream = new AudioInputStream(fInStream, aFormat, fTmpOut.length());
+            AudioSystem.write(aStream, type, fOut);
+            fInStream.close();
+        } catch (IOException ex) {
+            fLogger.error("Failed to write output file '%s'", fOut.getPath());
+        }
+        return clean();
+    }
 
-    protected boolean clean() {
+    public int write(ByteBuffer byteBuf, int nframes) {
+        if (direction == SA_STREAM_PLAYBACK) {
+            fLogger.error("FCannot read from file '%s' which is open for playback", fOut.getPath());
+            return 0;
+        }
+        int ret = 0;
+        byteBuf.flip();
+        try {
+            ret = fTmpChannel.write(byteBuf);
+        } catch (IOException ex) {
+            fLogger.error("Failed to write to temporary buffer file '%s'", fTmpOut.getPath());
+        }
+        return ret;
+    }
+
+    public int read(ByteBuffer byteBuf, int nframes) {
+        if (direction == SA_STREAM_RECORD) {
+            fLogger.error("FCannot read from file '%s' which is open for recording", fOut.getPath());
+        }
+        return 0;
+    }
+
+        protected boolean clean() {
         boolean ret = true;
+
         type = null;
         if (fTmpChannel != null) {
             try {
@@ -50,60 +113,6 @@ public class AudioFile extends SimpleAudio {
         }
         return ret;
 
-    }
-    public boolean close()
-    {
-        try {
-            fTmpChannel.close();
-            FileInputStream fStream = new FileInputStream(fTmpOut);
-            AudioFormat format =
-                    new AudioFormat(PCM_SIGNED, 44100, 8, 1, 1, 44100, false);
-            AudioInputStream aStream = new AudioInputStream(fStream, format, 100);
-            AudioSystem.write(aStream, type, fOut);
-        } catch (IOException ex) {
-
-        }
-
-
-        return clean();
-    }
-
-    public boolean open(File f) {
-        close();
-        String ext = FilenameUtils.getExtension(f.getName());
-        AudioFileFormat.Type types[] = AudioSystem.getAudioFileTypes();
-        for (int i = 0; i<types.length; i++) {
-            if (ext.equalsIgnoreCase(types[i].getExtension())) {
-                type = types[i];
-                break;
-            }
-        }
-        if (type == null) {
-            fLogger.fatal("Audio file extension '%s' is not supported", ext);
-            return false;
-        }
-        if (direction == SA_STREAM_RECORD) {
-            try {
-                fTmpOut = File.createTempFile("minimodem-", ".tmp");
-                fTmpChannel = new FileOutputStream(fTmpOut, false).getChannel();
-            } catch (IOException ex) {
-                fLogger.fatal("Failed to create temporary buffer file '%s'", fTmpOut.getPath());
-                clean();
-                return false;
-            }
-        }
-        return true;
-    }
-
-    int write (ByteBuffer byteBuf, int nframes ) {
-        int ret = 0;
-        byteBuf.flip();
-        try {
-            ret = fTmpChannel.write(byteBuf);
-        } catch (IOException ex) {
-            fLogger.error("Failed to write to temporary buffer file '%s'", fTmpOut.getPath());
-        }
-        return ret;
     }
 
 }

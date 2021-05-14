@@ -1,7 +1,9 @@
 /**
+ * minimodem4j
  * Baudot.java
  * Created from databits_baudot.c, databits.h, baudot.c, baudot.h @ https://github.com/kamalmostafa/minimodem
  */
+
 package minimodem.databits;
 
 import java.lang.Character;
@@ -214,9 +216,9 @@ public class Baudot implements IEncodeDecode {
         fLogger.warn("Skipping non-encodable character '%c' 0x%02x", (char)Byte.toUnsignedInt(charOut), Byte.toUnsignedInt(charOut));
     }
 
-    private void fatalError(byte charOut) {
-        fLogger.fatal("Input character failed '%c' 0x%02x", (char)Byte.toUnsignedInt(charOut), charOut);
-        fLogger.fatal("charset==" + Integer.toUnsignedString(charset));
+    private void returnError(byte charOut) {
+        fLogger.error("Input character failed '%c' 0x%02x", (char)Byte.toUnsignedInt(charOut), charOut);
+        fLogger.error("charset==" + Integer.toUnsignedString(charset));
         System.exit(-1);
     }
 
@@ -259,11 +261,11 @@ public class Baudot implements IEncodeDecode {
 
             if      (charset == 1)      {  databitsOutp[n++] = LTRS; }
             else if (charset == 2)      {  databitsOutp[n++] = FIGS; }
-            else    { fatalError(charOut); }
+            else    { returnError(charOut); return 0; }
             fLogger.trace("emit charset select 0x%02x", databitsOutp[n - 1]);
         }
 
-        if(!(charset == 1 || charset == 2)) { fatalError(charOut); }
+        if(!(charset == 1 || charset == 2)) { returnError(charOut); return 0;}
 
 
         databitsOutp[n++] = encodeTable[Byte.toUnsignedInt(ind)][0];
