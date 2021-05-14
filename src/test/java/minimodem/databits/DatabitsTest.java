@@ -8,7 +8,7 @@ import java.nio.file.Files;
 
 
 /**
- * Unit tests for minimodem.simpleaudio
+ * Unit tests for minimodem.databits
  */
 
 public class DatabitsTest {
@@ -40,28 +40,6 @@ public class DatabitsTest {
         assert(db.decode(null, 2, ed[0],8)==0);
 
         assert(db.decode(dd,3,0b10110010,8)==0);
-    }
-
-    @Test
-    public void CallerIdSDMFTest() throws IOException {
-        IEncodeDecode cid = new CallerId();
-        File bytesFile = new File(this.getClass().getResource("/testdata-callerid-sdmf.bytes").getFile());
-        byte[] msg = Files.readAllBytes(bytesFile.toPath());
-        File textFile = new File(this.getClass().getResource("/testdata-callerid-sdmf.txt").getFile());
-        String decoded = Files.readString(textFile.toPath());
-        byte[] msgDecoded = new byte[256];
-
-        for (byte b : msg) {
-            cid.decode(msgDecoded, msgDecoded.length, b, 8 );
-        }
-
-        String s = new String(msgDecoded);
-        assert(decoded.equals(msgDecoded));
-    }
-
-    @Test
-    public void CallerIdMDMFTest(){
-        IEncodeDecode cid = new CallerId();
     }
 
 }

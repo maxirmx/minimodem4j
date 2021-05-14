@@ -44,7 +44,7 @@ public class CallerId implements IEncodeDecode {
 
     private int msgType     = 0;
     private int nData       = 0;
-    private byte[] buffer   = new byte[256];
+    private final byte[] buffer   = new byte[256];
 
     /**
      * encode  -- placeholder only
@@ -110,9 +110,9 @@ public class CallerId implements IEncodeDecode {
     }
 
     private String nbToStr (int p, int n) {
-        StringBuilder rs = new StringBuilder(Byte.toString(buffer[p]));
-        for (int i=1; i<n; i++) {
-            rs.append((char) buffer[p + i]);
+        StringBuilder rs = new StringBuilder();
+        for (int i=0; i<n; i++) {
+            rs.append((char) buffer[p+i]);
         }
         return rs.toString();
     }
@@ -145,26 +145,27 @@ public class CallerId implements IEncodeDecode {
             switch (cidDatatype) {
                 case DATA_DATETIME:
             // From dataout_n += sprintf(dataout_p+dataout_n, "%.2s/%.2s %.2s:%.2s\n", m+0, m+2, m+4, m+6);
-                    rs.append(nbToStr(m, 2)).append("/").append(nbToStr(m + 2, 2)).append(nbToStr(m + 4, 2)).append(":").append(nbToStr(m + 6, 2)).append("\n");
+                    rs.append(nbToStr(m, 2)).append("/").append(nbToStr(m + 2, 2)).append(" ").
+                            append(nbToStr(m + 4, 2)).append(":").append(nbToStr(m + 6, 2)).append("\n");
                     break;
                 case DATA_PHONE:
                     if (cidDatalen == 10) {
             // From dataout_n += sprintf(dataout_p+dataout_n, "%.3s-%.3s-%.4s\n", m+0, m+3, m+6);
-                        rs.append(nbToStr(m, 3)).append("-").append(nbToStr(m + 3, 3)).append(nbToStr(m + 6, 4)).append("\n");
+                        rs.append(nbToStr(m, 3)).append("-").append(nbToStr(m + 3, 3)).append("-").append(nbToStr(m + 6, 4)).append("\n");
                         break;
                     } else {
                         // fallthrough
                         fLogger.warn("Skipping cidDatatype==DATA_PHONE with cidDatalen==%d", cidDatalen);
                     }
                 case DATA_NAME:
-                    rs.append(nbToStr(m, cidDatalen));
+                    rs.append(nbToStr(m, cidDatalen)).append("\n");;
                     break;
                 case DATA_PHONE_NA:
                 case DATA_NAME_NA:
                     if (cidDatalen == 1 && buffer[m] == 'O') {
-                        rs.append("[N/A]");
+                        rs.append("[N/A]").append("\n");;
                     } else if (cidDatalen == 1 && buffer[m] == 'P') {
-                        rs.append("[blocked]");
+                        rs.append("[blocked]").append("\n");;
                     } else {
                         // fallthrough
                         fLogger.warn("Skipping cidDatatype==DATA_PHONE_NA/DATA_NAME_NA with cidDatalen==%d and buffer[m]==%x", cidDatalen, buffer[m]);
@@ -188,14 +189,14 @@ public class CallerId implements IEncodeDecode {
         int m = 1;
         int cidMsglen = Byte.toUnsignedInt(buffer[m++]);
 
-        rs.append(datatypeNames[DATA_DATETIME]).append(nbToStr(m,2)).append("/").append(nbToStr(m+2,2)).
+        rs.append(datatypeNames[DATA_DATETIME]).append(nbToStr(m,2)).append("/").append(nbToStr(m+2,2)).append(" ").
                 append(nbToStr(m+4,2)).append(":").append(nbToStr(m+6,2) ).append("\n");
         m += 8;
 
         rs.append(datatypeNames[DATA_PHONE]);
         int cidDatalen = cidMsglen - 8;
         if(cidDatalen == 10) {
-            rs.append(nbToStr(m,3)).append("-").append(nbToStr(m+3,3)).append(nbToStr(m+6,4)).append("\n");
+            rs.append(nbToStr(m,3)).append("-").append(nbToStr(m+3,3)).append("-").append(nbToStr(m+6,4)).append("\n");
         } else {
             rs.append(nbToStr(m, cidDatalen)).append("\n");
         }
