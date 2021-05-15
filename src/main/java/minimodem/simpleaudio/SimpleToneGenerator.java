@@ -7,8 +7,11 @@ import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 import java.nio.ShortBuffer;
 
+import static javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT;
+import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
+
 public class SimpleToneGenerator {
-    private static final Logger fLogger = LogManager.getFormatterLogger("SimpleToneGenerator");
+    private static final Logger fLogger = LogManager.getFormatterLogger(SimpleToneGenerator.class);
 
     private static float toneMag = 1.0f;
     private static int sinTableLen;
@@ -102,19 +105,17 @@ public class SimpleToneGenerator {
 
         if (toneFreq != 0) {
             float waveNsamples = saOut.getRate() / toneFreq;
-            switch (saOut.getFormat()) {
-                case SA_SAMPLE_FORMAT_FLOAT:
-                    if (sinTableFloat != null) {
-                        for (i = 0; i < nsamplesDur; i++) {
-                            floatBuf.put(sinLuFloat(sinePhaseTurns(i, waveNsamples)));
-                        }
-                    } else {
-                        for (i = 0; i < nsamplesDur; i++) {
-                            floatBuf.put((float) (toneMag * Math.sin(sinePhaseRadians(i, waveNsamples))));
-                        }
+            if (saOut.getEncoding().equals(PCM_FLOAT)) {
+                if (sinTableFloat != null) {
+                    for (i = 0; i < nsamplesDur; i++) {
+                        floatBuf.put(sinLuFloat(sinePhaseTurns(i, waveNsamples)));
                     }
-                    break;
-                case SA_SAMPLE_FORMAT_S16: {
+                } else {
+                    for (i = 0; i < nsamplesDur; i++) {
+                        floatBuf.put((float) (toneMag * Math.sin(sinePhaseRadians(i, waveNsamples))));
+                    }
+                }
+            } else if (saOut.getEncoding().equals(PCM_SIGNED)) {
                     if (sinTableShort != null) {
                         for (i = 0; i < nsamplesDur; i++) {
                             shortBuf.put(sinLuShort(sinePhaseTurns(i, waveNsamples)));
@@ -131,12 +132,8 @@ public class SimpleToneGenerator {
                             shortBuf.put(lroundf((float) (magS * Math.sin(sinePhaseRadians(i, waveNsamples)))));
                         }
                     }
-                    break;
-                }
-                default:
-                    fLogger.fatal("Invalid stream format [%d] in processing.", saOut.getFormat());
-                    // FIXME: warning here?
-                    break;
+            } else {
+                    fLogger.error("Invalid stream format [%s] in processing.", saOut.getEncoding().toString());
             }
             saToneCphase = (saToneCphase + nsamplesDur / waveNsamples) % 1.0f;
         } else {

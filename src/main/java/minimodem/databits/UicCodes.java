@@ -45,8 +45,8 @@ public class UicCodes {
         } else if(type == TYPE_TRAINGROUND) {
             messages = TRAIN_TO_GROUND_MESSAGES;
         } else {
-            logger.fatal("Invalid UIC message type code=%x, type=%x", code, type);
-            System.exit(-1);
+            logger.error("Invalid UIC message type code=%x, type=%x", code, type);
+            return "Unknown";
         }
 
         String r = messages.get(code);

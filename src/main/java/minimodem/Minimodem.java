@@ -4,8 +4,9 @@ import java.io.File;
 import java.util.concurrent.Callable;
 
 import minimodem.arghelpers.*;
-import minimodem.databits.Ascii8;
-import minimodem.databits.Baudot;
+import minimodem.databits.DataBitsAscii8;
+import minimodem.databits.DataBitsBaudot;
+import minimodem.databits.DataBitsCallerId;
 import minimodem.databits.IEncodeDecode;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -46,13 +47,14 @@ class Minimodem implements Callable<Integer> {
 
 	@Option(names = {"-i", "--inverted"}) 									private boolean bfskInvertedFreqs;
 	static class DataBits {
-		@Option(names = {"-8", "--ascii"}, description = "ASCII  8-N-1") 	private boolean o8;
-		@Option(names = {"-7"}, description = "ASCII  7-N-1") 				private boolean o7;
-		@Option(names = {"-5", "--baudot"}, description = "Baudot  5-N-1") 	private boolean o5;
+		@Option(names = {"-8", "--ascii"}, description = "ASCII 8-N-1") 	private boolean ascii8N1;
+		@Option(names = {"-7"}, description = "ASCII 7-N-1") 				private boolean ascii7N1;
+		@Option(names = {"-5", "--baudot"}, description = "Baudot 5-N-1") 	private boolean baudot5N1;
 	}
-	@CommandLine.ArgGroup() 								DataBits oDatabits;
+	@CommandLine.ArgGroup() 												DataBits dataBits;
+
 	@Option(names = {"-u", "--usos"},  paramLabel = "{0|1}") 				private int oUsos;
-	@Option(names = {"--msb-first"}) 										private boolean oMsbFirst;
+	@Option(names = {"--msb-first"}) 										private boolean bfskMsbFirst;
 	@Option(names = {"-f", "--file"}, paramLabel = "{filename.flac}")       private File oFile;
 	@Option(names = {"-b", "--bandwidth"}, paramLabel = "{rx_bandwidth}",
 			parameterConsumer = BandwidthParameterConsumer.class
@@ -80,25 +82,25 @@ class Minimodem implements Callable<Integer> {
 			description = "Sets the number of stop bits (default is 1.0 for most baudmodes. Shall be >=0).",
 			parameterConsumer = NStopBitsParameterConsumer.class)
 			protected float bfskNStopBits = -1.0f;
-	@Option(names = {"--invert-start-stop"})								private boolean oInvertStartStop;
-	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}", defaultValue = "-1")			private Byte bfskSyncByte;
-	@Option(names = {"-q", "--quiet"})										private boolean oQuite;
+	@Option(names = {"--invert-start-stop"})													private boolean oInvertStartStop;
+	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}", defaultValue = "-1")				private Byte bfskSyncByte;
+	@Option(names = {"-q", "--quiet"})															private boolean oQuite;
 	@Option(names = {"-A", "--alsa"}, arity = "0..1", paramLabel = "{plughw:X,Y}")				private String oALSA;
 	@Option(names = {"-s", "sndio"}, arity = "0..1", paramLabel = "{device}")					private String oDevice;
 	@Option(names = {"-R", "--samplerate"}, paramLabel = "{rate}",
 			description = "Set the audio sample rate (default rate is 48000 Hz).",
 			parameterConsumer = SampleRateParameterConsumer.class)
 			protected int sampleRate = 48000;
-	@Option(names = {"--lut"}, paramLabel = "{tx_sin_table_len}")			private int oLut;
-	@Option(names = {"--float-samples"})									private boolean oFloatSamples;
-	@Option(names = {"--rx-one"})											private boolean oRxOne;
-	@Option(names = {"--benchmarks"})										private boolean oBenchmarks;
-	@Option(names = {"--binary-output"})									private boolean oBinaryOutput;
-	@Option(names = {"--binary-raw"}, paramLabel = "{nbits}", defaultValue = "0")			private int rawNBits;
-	@Option(names = {"--print-filter"})										private boolean oPrintFilter;
-	@Option(names = {"--print-eot"})										private boolean oPrintEot;
-	@Option(names = {"--Xrxnoise"}, paramLabel = "{rx-noise-factor}")		private boolean oXrxNoise;
-	@Option(names = {"--tx-carrier"})										private boolean oTxCarrier;
+	@Option(names = {"--lut"}, paramLabel = "{tx_sin_table_len}")								private int oLut;
+	@Option(names = {"--float-samples"})														private boolean oFloatSamples;
+	@Option(names = {"--rx-one"})																private boolean oRxOne;
+	@Option(names = {"--benchmarks"})															private boolean oBenchmarks;
+	@Option(names = {"--binary-output"})														private boolean oBinaryOutput;
+	@Option(names = {"--binary-raw"}, paramLabel = "{nbits}", defaultValue = "0")				private int rawNBits;
+	@Option(names = {"--print-filter"})															private boolean oPrintFilter;
+	@Option(names = {"--print-eot"})															private boolean oPrintEot;
+	@Option(names = {"--Xrxnoise"}, paramLabel = "{rx-noise-factor}")							private boolean oXrxNoise;
+	@Option(names = {"--tx-carrier"})															private boolean oTxCarrier;
 
 	@Parameters(index = "0", paramLabel = "{baudmod}",
 			description =
@@ -122,6 +124,8 @@ class Minimodem implements Callable<Integer> {
 	private int expectNBits;
 	private int autodetectShift;
 
+	protected IEncodeDecode bfskDatabitsDecode = new DataBitsAscii8();    // Character encoder/decoder
+
 	@Override
 	public Integer call() {
 		int quietMode = 0;
@@ -142,13 +146,10 @@ class Minimodem implements Callable<Integer> {
 		fLogger.error("We've just greeted the user!");
 		fLogger.fatal("We've just greeted the user!");
 
-		IEncodeDecode e = new Baudot();
+		IEncodeDecode e = new DataBitsBaudot();
 		int[] db = new int[2];
 		int rb = e.encode(db, (byte)'A');
 		rb = e.encode(db, (byte)0x12);
-
-		e = new Ascii8();
-		int rd = e.encode(db, (byte)'A');
 
 		return 0;
 	}
@@ -166,6 +167,16 @@ class Minimodem implements Callable<Integer> {
 	 * @return 0 if successful, application return code otherwise
 	 */
 	protected int configure() {
+
+		if (dataBits.ascii8N1) {					// ASCII 8-N-1
+			bfskNDataBits = 8;
+		} else if (dataBits.ascii7N1) {				// ASCII 7-N-1
+			bfskNDataBits = 7;
+		} else if (dataBits.baudot5N1) {			// Baudot 5-N-1
+			bfskNDataBits = 5;
+			bfskDatabitsDecode = new DataBitsBaudot();
+		}
+
 		if(modemMode.equalsIgnoreCase("rtty")) {
 			bfskDataRate = 45.45f;
 			if (bfskNDataBits == 0) { bfskNDataBits = 5; }
@@ -198,7 +209,8 @@ class Minimodem implements Callable<Integer> {
 			}
 			bfskDataRate = 1200f;
 			bfskNDataBits = 8;
-		} else if(modemMode.equalsIgnoreCase("uic")) {
+			bfskDatabitsDecode = new DataBitsCallerId();
+		} else if(modemMode.toLowerCase().startsWith("uic")) {
 			if(txMode != TXMODE.RECEIVE) {
 				fLogger.fatal ("uic-751-3 --tx mode is not supported.");
 				return 1;
