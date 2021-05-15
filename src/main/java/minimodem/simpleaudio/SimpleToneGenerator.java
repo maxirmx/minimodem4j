@@ -11,7 +11,7 @@ import static javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT;
 import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
 
 public class SimpleToneGenerator {
-    private static final Logger fLogger = LogManager.getFormatterLogger("SimpleToneGenerator");
+    private static final Logger fLogger = LogManager.getFormatterLogger(SimpleToneGenerator.class);
 
     private static float toneMag = 1.0f;
     private static int sinTableLen;

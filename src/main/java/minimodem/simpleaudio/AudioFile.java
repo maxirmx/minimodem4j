@@ -19,7 +19,7 @@ import static minimodem.simpleaudio.SaDirection.*;
 
 
 public class AudioFile extends SimpleAudio {
-    private static final Logger fLogger = LogManager.getFormatterLogger("AudioFile");
+    private static final Logger fLogger = LogManager.getFormatterLogger(AudioFile.class);
 
     protected SaDirection direction;
     protected AudioFileFormat.Type type = null;

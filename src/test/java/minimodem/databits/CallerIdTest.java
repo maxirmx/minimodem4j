@@ -14,7 +14,7 @@ import java.nio.file.Files;
 public class CallerIdTest {
     @Test
     public void CallerIdSDMFTest() throws IOException {
-        IEncodeDecode cid = new CallerId();
+        IEncodeDecode cid = new DataBitsCallerId();
 
         File bytesFile = new File(this.getClass().getResource("/testdata-callerid-sdmf.bytes").getFile());
         byte[] msg = Files.readAllBytes(bytesFile.toPath());
@@ -34,7 +34,7 @@ public class CallerIdTest {
 
     @Test
     public void CallerIdMDMFTest() throws IOException {
-        IEncodeDecode cid = new CallerId();
+        IEncodeDecode cid = new DataBitsCallerId();
         File bytesFile = new File(this.getClass().getResource("/testdata-callerid-mdmf.bytes").getFile());
         byte[] msg = Files.readAllBytes(bytesFile.toPath());
         File textFile = new File(this.getClass().getResource("/testdata-callerid-mdmf.txt").getFile());

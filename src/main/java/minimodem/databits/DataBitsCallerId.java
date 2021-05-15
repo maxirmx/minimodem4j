@@ -17,8 +17,8 @@ import org.apache.logging.log4j.Logger;
  * Reference: http://melabs.com/resources/callerid.htm
  */
 
-public class CallerId implements IEncodeDecode {
-    private static final Logger fLogger = LogManager.getFormatterLogger("DatabitsCallerId");
+public class DataBitsCallerId implements IEncodeDecode {
+    private static final Logger fLogger = LogManager.getFormatterLogger(DataBitsCallerId.class);
 
     private final static int MSG_MDMF = 0x80;
     private final static int MSG_SDMF = 0x04;
@@ -53,7 +53,7 @@ public class CallerId implements IEncodeDecode {
      * @return the number of data words stuffed into databitsOutp  (Always 0)
      */
     public int encode(int[] databitsOutp, byte charOut) {
-        fLogger.error("A call to encode which is not implemented for databits.CallerId");
+        fLogger.error("A call to encode which is not implemented for " + DataBitsCallerId.class);
         return 0;
     }
 
@@ -67,7 +67,9 @@ public class CallerId implements IEncodeDecode {
      * @return returns the number of bytes decoded
      */
     public int decode(byte[] dataoutP, int dataoutSize, long bits, int nDatabits) {
-        if (dataoutP == null) { return decodeCidReset(); } /* databits processor reset */
+        if (dataoutP == null) { /* databits processor reset */
+            return decodeCidReset();
+        }
 
         if (msgType == 0) {
             if (bits == MSG_MDMF)      { msgType = MSG_MDMF; }
@@ -109,6 +111,12 @@ public class CallerId implements IEncodeDecode {
         return rs.length();
     }
 
+    /**
+     * Converts given number of bytes from the current buffer position to string
+     * @param p - buffer position
+     * @param n - number of bytes to convert
+     * @return string
+     */
     private String nbToStr (int p, int n) {
         StringBuilder rs = new StringBuilder();
         for (int i=0; i<n; i++) {
@@ -117,6 +125,10 @@ public class CallerId implements IEncodeDecode {
         return rs.toString();
     }
 
+    /**
+     * Decodes multi-data
+     * @return  Caller id string
+     */
     private String decodeMdmfCallerid() {
         StringBuilder rs = new StringBuilder();
         int cidI = 0;
@@ -137,7 +149,6 @@ public class CallerId implements IEncodeDecode {
                 fLogger.error("Data length too big: m=%d, cidDatalen=%d, buffer.length=%d", m, cidDatalen, buffer.length);
                 return "";
             }
-
 
             // From dataout_n += sprintf(dataout_p+dataout_n, "%-6s ",  cid_datatype_names[cid_datatype]);
             rs.append(datatypeNames[cidDatatype]);
@@ -184,6 +195,10 @@ public class CallerId implements IEncodeDecode {
         return rs.toString();
     }
 
+    /**
+     * Decodes single-data
+     * @return  Caller id string
+     */
     private String decodeSdmfCallerid() {
         StringBuilder rs = new StringBuilder();
         int m = 1;
@@ -204,6 +219,10 @@ public class CallerId implements IEncodeDecode {
         return rs.toString();
     }
 
+    /**
+     * CallerId decoder reset
+     * @return 0
+     */
     private int decodeCidReset() {
         msgType = 0;
         nData = 0;

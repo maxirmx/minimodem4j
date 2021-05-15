@@ -11,8 +11,8 @@ import java.lang.Character;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-public class Baudot implements IEncodeDecode {
-    private static final Logger fLogger = LogManager.getFormatterLogger("Baudot");
+public class DataBitsBaudot implements IEncodeDecode {
+    private static final Logger fLogger = LogManager.getFormatterLogger(DataBitsBaudot.class);
 
     private final static byte[/* 32 */][/* 3 */] decodeTable =
             {       /* letter, U.S. figs, CCITT No.2 figs (Europe) */

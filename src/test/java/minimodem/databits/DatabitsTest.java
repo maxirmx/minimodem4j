@@ -2,10 +2,6 @@ package minimodem.databits;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-
 
 /**
  * Unit tests for minimodem.databits
@@ -14,7 +10,7 @@ import java.nio.file.Files;
 public class DatabitsTest {
     @Test
     public void Ascii8Test(){
-        IEncodeDecode db = new Ascii8();
+        IEncodeDecode db = new DataBitsAscii8();
         int[] ed = new int[2];
         assert(db.encode(ed, (byte) 'a')==1);
         assert(ed[0]==0x61);
@@ -28,7 +24,7 @@ public class DatabitsTest {
 
     @Test
     public void BinaryTest(){
-        IEncodeDecode db = new Binary();
+        IEncodeDecode db = new DataBitsBinary();
         int[] ed = new int[2];
         assert(db.encode(ed, (byte) 'a')==0);   // Not implemented
 

@@ -8,7 +8,7 @@ package minimodem.databits;
 /**
  * ASCII 8-bit data bits decoder/encoder (passthrough)
  */
-public class Ascii8 implements IEncodeDecode {
+public class DataBitsAscii8 implements IEncodeDecode {
     /**
      * encode
      * @param databitsOutp  the buffer for encoded data

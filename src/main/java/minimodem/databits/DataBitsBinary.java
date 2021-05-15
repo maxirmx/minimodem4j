@@ -13,7 +13,7 @@ import org.apache.logging.log4j.Logger;
  * Rawbits N-bit binary data decoder
  * (no encoder)
  */
-public class Binary implements IEncodeDecode {
+public class DataBitsBinary implements IEncodeDecode {
     /**
      * encode  -- placeholder only
      * @param databitsOutp  the buffer for encoded data
@@ -21,11 +21,11 @@ public class Binary implements IEncodeDecode {
      * @return the number of data words stuffed into databitsOutp  (Always 0)
      */
     public int encode(int[] databitsOutp, byte charOut) {
-        fLogger.error("A call to encode which is not implemented for databits.Binary");
+        fLogger.error("A call to encode which is not implemented for DataBitsBinary");
         return 0;
     }
 
-    private static final Logger fLogger = LogManager.getFormatterLogger("DatabitsBinary");
+    private static final Logger fLogger = LogManager.getFormatterLogger(DataBitsBinary.class);
     /**
      * decode
      * @param dataoutP the buffer for encoded data

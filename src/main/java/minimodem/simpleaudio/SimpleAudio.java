@@ -11,7 +11,7 @@ import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
 import static minimodem.simpleaudio.SaDirection.SA_STREAM_RECORD;
 
 public abstract class SimpleAudio {
-    private static final Logger fLogger = LogManager.getFormatterLogger("SimpleAudio");
+    private static final Logger fLogger = LogManager.getFormatterLogger(SimpleAudio.class);
 
     protected SaDirection direction;
     protected AudioFormat aFormat = null;
