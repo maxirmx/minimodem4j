@@ -9,13 +9,17 @@ package minimodem.databits;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.nio.charset.StandardCharsets;
+
+import static minimodem.databits.UicCodes.*;
+
 /**
  * Rawbits N-bit binary data decoder
  * (no encoder)
+ * 	http://ec.europa.eu/transport/rail/interoperability/doc/ccs-tsi-en-annex.pdf
  */
-public class DataBitsBinary implements IEncodeDecode {
-    private static final Logger fLogger = LogManager.getFormatterLogger(DataBitsBinary.class);
-
+public class DataBitsUicGround2Train implements IEncodeDecode {
+    private static final Logger logger = LogManager.getLogger(DataBitsUicGround2Train.class);
     /**
      * encode  -- placeholder only
      * @param databitsOutp  the buffer for encoded data
@@ -23,7 +27,7 @@ public class DataBitsBinary implements IEncodeDecode {
      * @return the number of data words stuffed into databitsOutp  (Always 0)
      */
     public int encode(int[] databitsOutp, byte charOut) {
-        fLogger.error("A call to encode which is not implemented for DataBitsBinary");
+        logger.error("A call to encode which is not implemented for DataBitsUicGround");
         return 0;
     }
 
@@ -37,18 +41,13 @@ public class DataBitsBinary implements IEncodeDecode {
      * @return returns the number of bytes decoded
      */
     public int decode(byte[] dataoutP, int dataoutSize, long bits, int nDatabits) {
-        if (dataoutP == null) { return 0; } /* databits processor reset: noop */
-
-        if (dataoutSize < nDatabits+1) {
-            fLogger.error("dataoutSize (%d) is less then nDatabits+1 (%d)", dataoutSize, nDatabits + 1);
+        if (dataoutP == null) {  /* databits processor reset: noop */
             return 0;
         }
-        int j;
-        for (j = 0; j < nDatabits; j++) {
-            dataoutP[j] = (byte)((bits >>> j & 1) + '0');
-        }
-        dataoutP[j] = '\n';
-        return nDatabits + 1;
+
+        String rs = databitsDecodeUic(bits, TYPE_GROUNDTRAIN);
+        System.arraycopy(rs.getBytes(StandardCharsets.UTF_8), 0, dataoutP, 0, rs.length());
+        return rs.length();
     }
 
 }

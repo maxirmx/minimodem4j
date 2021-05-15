@@ -4,10 +4,7 @@ import java.io.File;
 import java.util.concurrent.Callable;
 
 import minimodem.arghelpers.*;
-import minimodem.databits.DataBitsAscii8;
-import minimodem.databits.DataBitsBaudot;
-import minimodem.databits.DataBitsCallerId;
-import minimodem.databits.IEncodeDecode;
+import minimodem.databits.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -95,8 +92,8 @@ class Minimodem implements Callable<Integer> {
 	@Option(names = {"--float-samples"})														private boolean oFloatSamples;
 	@Option(names = {"--rx-one"})																private boolean oRxOne;
 	@Option(names = {"--benchmarks"})															private boolean oBenchmarks;
-	@Option(names = {"--binary-output"})														private boolean oBinaryOutput;
-	@Option(names = {"--binary-raw"}, paramLabel = "{nbits}", defaultValue = "0")				private int rawNBits;
+	@Option(names = {"--binary-output"})														private boolean outputModeBinary;
+	@Option(names = {"--binary-raw"}, paramLabel = "{nbits}", defaultValue = "0")				private int outputModeRawNBits;
 	@Option(names = {"--print-filter"})															private boolean oPrintFilter;
 	@Option(names = {"--print-eot"})															private boolean oPrintEot;
 	@Option(names = {"--Xrxnoise"}, paramLabel = "{rx-noise-factor}")							private boolean oXrxNoise;
@@ -126,6 +123,21 @@ class Minimodem implements Callable<Integer> {
 
 	protected IEncodeDecode bfskDatabitsDecode = new DataBitsAscii8();    // Character encoder/decoder
 
+	/**
+	 * main
+	 * Implements Callable, so parsing, error handling and handling user
+	 * requests for usage help or version are done by picocli with one line of code.
+	 * @param args as usual
+	 */
+	public static void main(String... args) {
+		int exitCode = new CommandLine(new Minimodem()).execute(args);
+		System.exit(exitCode);
+	}
+
+	/**
+	 * call - the shadow entry point for picocli
+	 * @return application exit code
+	 */
 	@Override
 	public Integer call() {
 		int quietMode = 0;
@@ -154,20 +166,16 @@ class Minimodem implements Callable<Integer> {
 		return 0;
 	}
 
-	// Implements Callable, so parsing, error handling and handling user
-	// requests for usage help or version are done by picocli with one line of code.
-	public static void main(String... args) {
-		int exitCode = new CommandLine(new Minimodem()).execute(args);
-		System.exit(exitCode);
+	public int transmit() {
+		return 0;
 	}
 
 	/**
 	 * configure
-	 * Builds modem configureation from the command line parameters
+	 * Builds modem configuration from the command line parameters
 	 * @return 0 if successful, application return code otherwise
 	 */
 	protected int configure() {
-
 		if (dataBits.ascii8N1) {					// ASCII 8-N-1
 			bfskNDataBits = 8;
 		} else if (dataBits.ascii7N1) {				// ASCII 7-N-1
@@ -215,8 +223,6 @@ class Minimodem implements Callable<Integer> {
 				fLogger.fatal ("uic-751-3 --tx mode is not supported.");
 				return 1;
 			}
-			// http://ec.europa.eu/transport/rail/interoperability/doc/ccs-tsi-en-annex.pdf
-
 			bfskDataRate = 600;
 			bfskNDataBits = 39;
 			bfskMarkF = 1300f;
@@ -226,6 +232,14 @@ class Minimodem implements Callable<Integer> {
 
 			expectDataString = "11110010ddddddddddddddddddddddddddddddddddddddd\0".getBytes();
 			expectNBits = 47;
+
+			if(modemMode.equalsIgnoreCase("uic-train")) {
+				bfskDatabitsDecode = new DataBitsUicGround2Train();
+			} else if (modemMode.equalsIgnoreCase("uic-ground")) {
+				bfskDatabitsDecode = new DataBitsUicTrain2Ground();
+			} else{
+				bfskDataRate = 0.0f;
+			}
 		} else if(modemMode.equalsIgnoreCase("V.21")) {
 			bfskDataRate = 300;
 			bfskMarkF = 980f;
@@ -244,10 +258,13 @@ class Minimodem implements Callable<Integer> {
 			CommandLine.usage(this, System.out);
 		}
 
-		if (rawNBits!=0) {                   // Outpu mode: binary raw
+		if (outputModeBinary || outputModeRawNBits!=0) {
+			bfskDatabitsDecode = new DataBitsBinary();
+		}
+		if (outputModeRawNBits!=0) {
 			bfskNStartBits = 0;
 			bfskNStopBits = 0;
-			bfskNDataBits = rawNBits;
+			bfskNDataBits = outputModeRawNBits;
 		}
 
 		if(bfskDataRate >= 400) {
@@ -295,8 +312,12 @@ class Minimodem implements Callable<Integer> {
 		}
 
 		// defaults: 1 start bit, 1 stop bit
-		if(bfskNStartBits < 0) { bfskNStartBits = 1; }
-		if(bfskNStopBits < 0) { bfskNStopBits = 1.0f; }
+		if(bfskNStartBits < 0) {
+			bfskNStartBits = 1;
+		}
+		if(bfskNStopBits < 0) {
+			bfskNStopBits = 1.0f;
+		}
 
 		// n databits plus bfsk_startbit start bits plus bfsk_nstopbit stop bits:
 		int bfskFrameNBits = (int)(bfskNDataBits + bfskNStartBits + bfskNStopBits);

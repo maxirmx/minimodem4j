@@ -107,7 +107,6 @@ public class DataBitsCallerId implements IEncodeDecode {
         decodeCidReset();
 
         System.arraycopy(rs.getBytes(StandardCharsets.UTF_8), 0, dataoutP, 0, rs.length());
-
         return rs.length();
     }
 
