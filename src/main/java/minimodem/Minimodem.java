@@ -5,6 +5,9 @@ import java.util.concurrent.Callable;
 
 import minimodem.arghelpers.*;
 import minimodem.databits.*;
+import minimodem.simpleaudio.SaDirection;
+import static minimodem.simpleaudio.SaDirection.*;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -13,19 +16,19 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+
 @Command(name = "minimodem4j", mixinStandardHelpOptions = true, version = "Version: 0.0.1",
 		description = "Minimodem Java port", usageHelpWidth = 120)
 class Minimodem implements Callable<Integer> {
 	private static final Logger fLogger = LogManager.getFormatterLogger("Minimodem");
 
 	static class OpMode {
-		@Option(names = {"-t", "--tx", "--transmit", "--write"}, required = true) 		private boolean oTransmit;
-		@Option(names = {"-r", "--rx", "--receive", "--read"}, required = true) 		private boolean oReceive;
+		@Option(names = {"-t", "--tx", "--transmit", "--write"}, required = true) 		private boolean oTx;
+		@Option(names = {"-r", "--rx", "--receive", "--read"}, required = true) 		private boolean oRx;
 	}
-	@CommandLine.ArgGroup(multiplicity = "1") 						private OpMode opMode;
+	@CommandLine.ArgGroup() 						private OpMode opMode;
 
-	private enum TXMODE { UNKNOWN, RECEIVE, TRANSMIT }
-	protected TXMODE txMode;
+	protected SaDirection txMode;
 
 	@Option(names = {"-c", "--confidence"}, paramLabel = "{min-confidence-threshold}", defaultValue = "1.5f",
 			description = "Signal-to-noise squelch control, The minimum SNR-ish confidence level seen as \"a signal\"")
@@ -50,12 +53,18 @@ class Minimodem implements Callable<Integer> {
 	}
 	@CommandLine.ArgGroup() 												DataBits dataBits;
 
-	@Option(names = {"-u", "--usos"},  paramLabel = "{0|1}") 				private int oUsos;
+	@Option(names = {"-u", "--usos"},  paramLabel = "{0|1}",
+			description="Enable or disable USOS (UnShift on Space) for baudot (defaule: 1, i.e.: enable). +" +
+					" USOS is a convention whereby a SPACE also implies a switch to LETTERS character " +
+					"set.  This switch can be used to disable USOS so that streams not " +
+					"adhering to this convention can be decoded correctly (e.g. German " +
+					"DWD's RTTY maritime weather report and forecast).",
+			parameterConsumer = USoSParameterConsumer.class)
+			protected boolean baudotUSOS = true;
 	@Option(names = {"--msb-first"}) 										private boolean bfskMsbFirst;
 	@Option(names = {"-f", "--file"}, paramLabel = "{filename.flac}")       private File oFile;
 	@Option(names = {"-b", "--bandwidth"}, paramLabel = "{rx_bandwidth}",
-			parameterConsumer = BandwidthParameterConsumer.class
-			)
+			parameterConsumer = BandwidthParameterConsumer.class)
 			protected float bandWidth = 0.0f;
 	@Option(names = {"-v", "--volume"}, paramLabel = "{amplitude or 'E'}",
 			parameterConsumer = VolumeParameterConsumer.class,
@@ -92,8 +101,19 @@ class Minimodem implements Callable<Integer> {
 	@Option(names = {"--float-samples"})														private boolean oFloatSamples;
 	@Option(names = {"--rx-one"})																private boolean oRxOne;
 	@Option(names = {"--benchmarks"})															private boolean oBenchmarks;
-	@Option(names = {"--binary-output"})														private boolean outputModeBinary;
-	@Option(names = {"--binary-raw"}, paramLabel = "{nbits}", defaultValue = "0")				private int outputModeRawNBits;
+	@Option(names = {"--binary-output"},
+			description="Print received data bits as raw binary output using characters '0' and '1'. " +
+			"The bits are printed in the order they are received.  Framing bits (start " +
+			"and stop bits) are omitted from the output. (This option applies to --rx mode only).")
+			protected boolean outputModeBinary;
+	@Option(names = {"--binary-raw"}, paramLabel = "{nbits}",
+			description="Print all received bits (data bits and any framing bits) as raw binary output " +
+					"using characters '0' and '1'.  Framing bits are not interpreted, but simply " +
+					"passed through to the output.  The bits are printed in the order they are " +
+					"received, in lines {nbits} wide.  So in order to display a standard 8-N-1 " +
+					"bitstream (8 databits + 1 start bit + 1 stop bit), use '--binary-raw 10' " +
+					" or a multiple of 10. (This option applies to --rx mode only).")
+			private int outputModeRawNBits=0;
 	@Option(names = {"--print-filter"})															private boolean oPrintFilter;
 	@Option(names = {"--print-eot"})															private boolean oPrintEot;
 	@Option(names = {"--Xrxnoise"}, paramLabel = "{rx-noise-factor}")							private boolean oXrxNoise;
@@ -127,7 +147,7 @@ class Minimodem implements Callable<Integer> {
 	 * main
 	 * Implements Callable, so parsing, error handling and handling user
 	 * requests for usage help or version are done by picocli with one line of code.
-	 * @param args as usual
+	 * @param args as usual :)
 	 */
 	public static void main(String... args) {
 		int exitCode = new CommandLine(new Minimodem()).execute(args);
@@ -150,23 +170,15 @@ class Minimodem implements Callable<Integer> {
 		}
 
 		fLogger.info("Running minimodem4j ...");
+		return (txMode.equals(SA_STREAM_PLAYBACK))?transmit():receive();
 
-		fLogger.trace("We've just greeted the user!");
-		fLogger.debug("We've just greeted the user!");
-		fLogger.info("We've just greeted the user!");
-		fLogger.warn("We've just greeted the user!");
-		fLogger.error("We've just greeted the user!");
-		fLogger.fatal("We've just greeted the user!");
+	}
 
-		IEncodeDecode e = new DataBitsBaudot();
-		int[] db = new int[2];
-		int rb = e.encode(db, (byte)'A');
-		rb = e.encode(db, (byte)0x12);
-
+	protected int transmit() {
 		return 0;
 	}
 
-	public int transmit() {
+	protected int receive() {
 		return 0;
 	}
 
@@ -176,15 +188,21 @@ class Minimodem implements Callable<Integer> {
 	 * @return 0 if successful, application return code otherwise
 	 */
 	protected int configure() {
-		if (dataBits.ascii8N1) {					// ASCII 8-N-1
-			bfskNDataBits = 8;
-		} else if (dataBits.ascii7N1) {				// ASCII 7-N-1
-			bfskNDataBits = 7;
-		} else if (dataBits.baudot5N1) {			// Baudot 5-N-1
-			bfskNDataBits = 5;
-			bfskDatabitsDecode = new DataBitsBaudot();
+		if (opMode != null && opMode.oTx) {
+			txMode = SA_STREAM_PLAYBACK;
+		} else {
+			txMode = SA_STREAM_RECORD;
 		}
-
+		if (dataBits != null) {
+			if (dataBits.ascii8N1) {                    // ASCII 8-N-1
+				bfskNDataBits = 8;
+			} else if (dataBits.ascii7N1) {                // ASCII 7-N-1
+				bfskNDataBits = 7;
+			} else if (dataBits.baudot5N1) {            // Baudot 5-N-1
+				bfskNDataBits = 5;
+				bfskDatabitsDecode = new DataBitsBaudot(baudotUSOS);
+			}
+		}
 		if(modemMode.equalsIgnoreCase("rtty")) {
 			bfskDataRate = 45.45f;
 			if (bfskNDataBits == 0) { bfskNDataBits = 5; }
@@ -202,13 +220,13 @@ class Minimodem implements Callable<Integer> {
 			bfskNStartBits = 0;
 			bfskNStopBits = 0;
 			bfskDoRxSync = true;
-			oUsos = 16;
+			bfskDoTxSyncBytes = 16;
 			bfskSyncByte = (byte)0xAB;
 			bfskMarkF = (float)(2083.0 + 1 / 3.0);
 			bfskSpaceF = 1562.5f;
 			bandWidth = bfskDataRate;
 		} else if(modemMode.equalsIgnoreCase("caller")) {
-			if(txMode != TXMODE.RECEIVE) {
+			if(txMode.equals(SA_STREAM_PLAYBACK)){
 				fLogger.fatal ("callerid --tx mode is not supported.");
 				return 1;
 			}
@@ -219,7 +237,7 @@ class Minimodem implements Callable<Integer> {
 			bfskNDataBits = 8;
 			bfskDatabitsDecode = new DataBitsCallerId();
 		} else if(modemMode.toLowerCase().startsWith("uic")) {
-			if(txMode != TXMODE.RECEIVE) {
+			if(txMode.equals(SA_STREAM_PLAYBACK)) {
 				fLogger.fatal ("uic-751-3 --tx mode is not supported.");
 				return 1;
 			}

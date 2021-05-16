@@ -163,21 +163,25 @@ public class DataBitsBaudot implements IEncodeDecode {
      * 1 LTRS state
      * 2 FIGS state
      */
-    private final static int LTRS = 0x1F;
-    private final static int FIGS = 0x1B;
-    private final static int SPACE = 0x04;
+    protected final static int LTRS = 0x1F;
+    protected final static int FIGS = 0x1B;
+    protected final static int SPACE = 0x04;
 
     private int charset = 0;       /* FIXME */
 
     /**
      * UnShift on space
      */
-    public int unshiftOnSpace = 1;
+    private boolean unshiftOnSpace;
 
-    public void reset() {
+    private void reset() {
         charset = 1;
     }
 
+    public DataBitsBaudot(boolean usos)
+    {
+        unshiftOnSpace = usos;
+    }
     /**
      * Returns 1 if *char_outp was stuffed with an output character
      * or 0 if no output character was stuffed (in other words, returns
@@ -193,13 +197,13 @@ public class DataBitsBaudot implements IEncodeDecode {
         } else if (Byte.toUnsignedInt(databits) == LTRS) {
             charset = 1;
             stuffChar = 0;
-        } else if (Byte.toUnsignedInt(databits) == SPACE && (unshiftOnSpace != 0)) {
+        } else if (Byte.toUnsignedInt(databits) == SPACE && unshiftOnSpace) {
             /* RX un-shift on space */
             charset = 1;
         }
         if (stuffChar != 0) {
             int t;
-            if (charset == 1) { t = 0; }
+            if (charset == 1)        { t = 0; }
             else                     { t = 1; }  // U.S. figs
                                     // t = 2;	// CCITT figs
             charOutp[0] = decodeTable[Byte.toUnsignedInt(databits)][t];
@@ -219,7 +223,6 @@ public class DataBitsBaudot implements IEncodeDecode {
     private void returnError(byte charOut) {
         fLogger.error("Input character failed '%c' 0x%02x", (char)Byte.toUnsignedInt(charOut), charOut);
         fLogger.error("charset==" + Integer.toUnsignedString(charset));
-        System.exit(-1);
     }
 
     public int decode(byte[] dataoutP, int dataoutSize, long bits, int nDatabits) {
@@ -247,7 +250,8 @@ public class DataBitsBaudot implements IEncodeDecode {
 
         byte charsetMask = encodeTable[Byte.toUnsignedInt(ind)][1];
 
-        fLogger.trace("(charset==%d)   input character '%c' 0x%02x charsetMask=%d", charset, charOut, charOut, charsetMask);
+        fLogger.trace("(charset==%d)   input character '%c' 0x%02x charsetMask=%d",
+                charset, charOut, charOut, charsetMask);
 
         if ((charset & Byte.toUnsignedInt(charsetMask)) == 0) {
             if (Byte.toUnsignedInt(charsetMask) == 0) {
@@ -267,11 +271,10 @@ public class DataBitsBaudot implements IEncodeDecode {
 
         if(!(charset == 1 || charset == 2)) { returnError(charOut); return 0;}
 
-
         databitsOutp[n++] = encodeTable[Byte.toUnsignedInt(ind)][0];
 
         /* TX un-shift on space */
-        if(charOut == ' ' && (unshiftOnSpace !=0)) {
+        if(charOut == ' ' && unshiftOnSpace) {
             charset = 1;
         }
 

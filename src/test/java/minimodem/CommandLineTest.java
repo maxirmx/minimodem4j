@@ -161,5 +161,30 @@ public class CommandLineTest
         } catch(Exception ignored) {
         }
     }
+
+    // USOS ("--usos") parameter tests
+    @Test
+    public void USOSTest() {
+        final String[] args0 = {"--tx", "300"};
+        Minimodem minimodem = processCmdLine(args0);
+        assert minimodem.baudotUSOS;
+
+        final String[] args1 = {"--tx", "300", "--usos", "1"};
+        minimodem = processCmdLine(args1);
+        assert minimodem.baudotUSOS;
+
+        final String[] args2 = {"--rx", "300", "--usos", "0"};
+        minimodem = processCmdLine(args2);
+        assert (!minimodem.baudotUSOS);
+
+        final String[] args3 = {"--tx", "300", "--usos=2"};
+        try {
+            processCmdLine(args3);
+            assert false;
+        } catch (Exception ignored)
+        {
+        }
+
+    }
 }
 
