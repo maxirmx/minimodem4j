@@ -1,3 +1,8 @@
+/**
+ * minimodem4j
+ * picocli argument parser helper class
+ * Serves "--samplerate"
+ */
 package minimodem.arghelpers;
 
 import picocli.CommandLine;

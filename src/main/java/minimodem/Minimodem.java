@@ -5,9 +5,14 @@ import java.util.concurrent.Callable;
 
 import minimodem.arghelpers.*;
 import minimodem.databits.*;
+import minimodem.simpleaudio.SaAudioFile;
 import minimodem.simpleaudio.SaDirection;
+
+import static javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT;
+import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
 import static minimodem.simpleaudio.SaDirection.*;
 
+import minimodem.simpleaudio.SaToneGenerator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -23,36 +28,34 @@ class Minimodem implements Callable<Integer> {
 	private static final Logger fLogger = LogManager.getFormatterLogger("Minimodem");
 
 	static class OpMode {
-		@Option(names = {"-t", "--tx", "--transmit", "--write"}, required = true) 		private boolean oTx;
-		@Option(names = {"-r", "--rx", "--receive", "--read"}, required = true) 		private boolean oRx;
+		@Option(names = {"-t", "--tx", "--transmit", "--write"}, required = true) 		protected boolean oTx = false;
+		@Option(names = {"-r", "--rx", "--receive", "--read"}, required = true) 		protected boolean oRx = false;
 	}
-	@CommandLine.ArgGroup() 						private OpMode opMode;
-
-	protected SaDirection txMode;
-
+	@CommandLine.ArgGroup() 						protected OpMode opMode;
 	@Option(names = {"-c", "--confidence"}, paramLabel = "{min-confidence-threshold}", defaultValue = "1.5f",
-			description = "Signal-to-noise squelch control, The minimum SNR-ish confidence level seen as \"a signal\"")
-			private float fskConfidenceThreshold;
+			description = "Signal-to-noise squelch control, The minimum SNR-ish confidence level seen as 'a signal'")
+			protected float fskConfidenceThreshold;
 	@Option(names = {"-l", "--limit"}, paramLabel = "{max-confidence-search-limit}", defaultValue = "2.3f",
 			description = "Performance vs. quality control. If we find a frame with " +
 					"confidence > confidence_search_limit, quit searching for a better frame. " +
 					"confidence_search_limit has dramatic effect on performance (high value yields " +
 					"low performance, but higher decode quality, for noisy or hard-to-discern signals " +
 					"(Bell 103, or skewed rates).")
-			private float fskConfidenceSearchLimit;
+			protected float fskConfidenceSearchLimit;
 	@Option(names = {"-a", "--auto-carrier"},
 			parameterConsumer = AutoDetectCarrierParameterConsumer.class,
 			description = "Automatically detect mark and space frequencies from carrier.")
 			protected float carrierAutodetectThreshold = 0.0f;
-
-	@Option(names = {"-i", "--inverted"}) 									private boolean bfskInvertedFreqs;
+	@Option(names = {"-i", "--inverted"},
+			description = "Invert the mark and space frequencies (applies whether the " +
+					"frequencies are defaults, discovered by --auto-carrier, or specified manually).")
+			protected boolean bfskInvertedFreqs = false;
 	static class DataBits {
-		@Option(names = {"-8", "--ascii"}, description = "ASCII 8-N-1") 	private boolean ascii8N1;
-		@Option(names = {"-7"}, description = "ASCII 7-N-1") 				private boolean ascii7N1;
-		@Option(names = {"-5", "--baudot"}, description = "Baudot 5-N-1") 	private boolean baudot5N1;
+		@Option(names = {"-8", "--ascii"}, description = "ASCII 8-N-1") 	protected boolean ascii8N1 = false;
+		@Option(names = {"-7"}, description = "ASCII 7-N-1") 				protected boolean ascii7N1 = false;
+		@Option(names = {"-5", "--baudot"}, description = "Baudot 5-N-1") 	protected boolean baudot5N1 = false;
 	}
-	@CommandLine.ArgGroup() 												DataBits dataBits;
-
+	@CommandLine.ArgGroup() 												protected DataBits dataBits;
 	@Option(names = {"-u", "--usos"},  paramLabel = "{0|1}",
 			description="Enable or disable USOS (UnShift on Space) for baudot (defaule: 1, i.e.: enable). +" +
 					" USOS is a convention whereby a SPACE also implies a switch to LETTERS character " +
@@ -61,8 +64,10 @@ class Minimodem implements Callable<Integer> {
 					"DWD's RTTY maritime weather report and forecast).",
 			parameterConsumer = USoSParameterConsumer.class)
 			protected boolean baudotUSOS = true;
-	@Option(names = {"--msb-first"}) 										private boolean bfskMsbFirst;
-	@Option(names = {"-f", "--file"}, paramLabel = "{filename.flac}")       private File oFile;
+	@Option(names = {"--msb-first"}) 										protected boolean bfskMsbFirst=false;
+	@Option(names = {"-f", "--file"}, paramLabel = "{filename.flac}",
+			description="Encode or decode an audio file (extension sets audio format)")
+			protected File file=null;
 	@Option(names = {"-b", "--bandwidth"}, paramLabel = "{rx_bandwidth}",
 			parameterConsumer = BandwidthParameterConsumer.class)
 			protected float bandWidth = 0.0f;
@@ -88,23 +93,31 @@ class Minimodem implements Callable<Integer> {
 			description = "Sets the number of stop bits (default is 1.0 for most baudmodes. Shall be >=0).",
 			parameterConsumer = NStopBitsParameterConsumer.class)
 			protected float bfskNStopBits = -1.0f;
-	@Option(names = {"--invert-start-stop"})													private boolean oInvertStartStop;
-	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}", defaultValue = "-1")				private Byte bfskSyncByte;
-	@Option(names = {"-q", "--quiet"})															private boolean oQuite;
-	@Option(names = {"-A", "--alsa"}, arity = "0..1", paramLabel = "{plughw:X,Y}")				private String oALSA;
-	@Option(names = {"-s", "sndio"}, arity = "0..1", paramLabel = "{device}")					private String oDevice;
+	@Option(names = {"--invert-start-stop"})											protected boolean invertStartStop;
+	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}")								protected int bfskSyncByte = -1;
+	@Option(names = {"-q", "--quiet"})													protected boolean oQuite;
+	@Option(names = {"-A", "--alsa"}, arity = "0..1", paramLabel = "{plughw:X,Y}")		protected String oALSA;
+	@Option(names = {"-s", "sndio"}, arity = "0..1", paramLabel = "{device}")			protected String oDevice;
 	@Option(names = {"-R", "--samplerate"}, paramLabel = "{rate}",
 			description = "Set the audio sample rate (default rate is 48000 Hz).",
 			parameterConsumer = SampleRateParameterConsumer.class)
 			protected int sampleRate = 48000;
-	@Option(names = {"--lut"}, paramLabel = "{tx_sin_table_len}")								private int oLut;
-	@Option(names = {"--float-samples"})														private boolean oFloatSamples;
-	@Option(names = {"--rx-one"})																private boolean oRxOne;
-	@Option(names = {"--benchmarks"})															private boolean oBenchmarks;
+	@Option(names = {"--lut"}, paramLabel = "{tx_sin_table_len}",
+			description="Minimodem uses a precomputed sine wave lookup table of 1024 elements," +
+					"or the size specified here.  Use --lut=0 to disable the use of " +
+					"the sine wave lookup table.  (This option applies to --tx mode only).")
+			protected int txSinTableLen = 4096;
+	@Option(names = {"--float-samples"},
+			description = "Generate 32-bit floating-point format audio samples, instead of the " +
+						"default 16-bit signed integer format (applies to --tx mode only; " +
+						"--rx mode always uses 32-bit floating-point).")
+			protected boolean floatSamples;
+	@Option(names = {"--rx-one"})														protected boolean oRxOne;
+	@Option(names = {"--benchmarks"})													protected boolean oBenchmarks;
 	@Option(names = {"--binary-output"},
 			description="Print received data bits as raw binary output using characters '0' and '1'. " +
-			"The bits are printed in the order they are received.  Framing bits (start " +
-			"and stop bits) are omitted from the output. (This option applies to --rx mode only).")
+					"The bits are printed in the order they are received.  Framing bits (start " +
+					"and stop bits) are omitted from the output. (This option applies to --rx mode only).")
 			protected boolean outputModeBinary;
 	@Option(names = {"--binary-raw"}, paramLabel = "{nbits}",
 			description="Print all received bits (data bits and any framing bits) as raw binary output " +
@@ -113,11 +126,14 @@ class Minimodem implements Callable<Integer> {
 					"received, in lines {nbits} wide.  So in order to display a standard 8-N-1 " +
 					"bitstream (8 databits + 1 start bit + 1 stop bit), use '--binary-raw 10' " +
 					" or a multiple of 10. (This option applies to --rx mode only).")
-			private int outputModeRawNBits=0;
-	@Option(names = {"--print-filter"})															private boolean oPrintFilter;
-	@Option(names = {"--print-eot"})															private boolean oPrintEot;
-	@Option(names = {"--Xrxnoise"}, paramLabel = "{rx-noise-factor}")							private boolean oXrxNoise;
-	@Option(names = {"--tx-carrier"})															private boolean oTxCarrier;
+			protected int outputModeRawNBits=0;
+	@Option(names = {"--print-filter"})													protected boolean oPrintFilter;
+	@Option(names = {"--print-eot"})													protected boolean oPrintEot;
+	@Option(names = {"--Xrxnoise"}, paramLabel = "{rx-noise-factor}")					protected boolean oXrxNoise;
+	@Option(names = {"--tx-carrier"},
+			description="When transmitting from a blocking source, keep a carrier going while waiting " +
+					"for more data.")
+			protected boolean txCarrier;
 
 	@Parameters(index = "0", paramLabel = "{baudmod}",
 			description =
@@ -128,20 +144,25 @@ class Minimodem implements Callable<Integer> {
 		"		     tdd       TTY/TDD    45.45 bps --baudot --stopbits=2.0%n" +
 		"		    same       NOAA SAME 520.83 bps --sync-byte=0xAB ...%n" +
 		"		callerid       Bell202 CID 1200 bps%n" +
-		"uic{-train,-ground}   UIC-751-3 Train/Ground 600 bps%n%n")	private String modemMode;
+		"uic{-train,-ground}   UIC-751-3 Train/Ground 600 bps%n%n")	protected String modemMode;
 
+	protected SaDirection txMode;
 	protected float bfskDataRate = 0.0f;           //  Data rate (baud rate) is deduced from the parameter above
 
+	protected int bfskDoTxSyncBytes = 0;
+	protected int bfskNDataBits = 0;
+
+	protected static  int nChannels = 1; // FIXME: only works with one channel
+
 	private boolean	bfskDoRxSync = false;
-	private int bfskDoTxSyncBytes = 0;
-	private int bfskNDataBits = 0;
 	private int txLeaderBitsLen = 2;
 	private byte[] expectDataString = null;
 	private byte[] expectSyncString = null;
 	private int expectNBits;
 	private int autodetectShift;
 
-	protected IEncodeDecode bfskDatabitsDecode = new DataBitsAscii8();    // Character encoder/decoder
+
+	protected IEncodeDecode bfskDatabitsEncodeDecode = new DataBitsAscii8();    // Character encoder/decoder
 
 	/**
 	 * main
@@ -160,25 +181,54 @@ class Minimodem implements Callable<Integer> {
 	 */
 	@Override
 	public Integer call() {
+		fLogger.info("Running minimodem4j ...");
+
 		int quietMode = 0;
 		int outputPrintFilter = 0;
-		int invertStartStop = 0;
 
+		fLogger.info("Configuring minimodem4j ...");
 		int cfgRc = configure();
 		if (cfgRc != 0) {
 			return cfgRc;
 		}
-
-		fLogger.info("Running minimodem4j ...");
 		return (txMode.equals(SA_STREAM_PLAYBACK))?transmit():receive();
-
 	}
 
 	protected int transmit() {
+		fLogger.info("Transmitting ...");
+		SaToneGenerator.toneInit(txSinTableLen, txAmplitude);
+
+		SaAudioFile saOut = new SaAudioFile();
+		if (!saOut.open(file,
+				floatSamples?PCM_FLOAT:PCM_SIGNED,
+				SA_STREAM_RECORD,
+				sampleRate,
+				nChannels,
+				bfskMsbFirst)) {
+			return -1;
+		}
+
+		Transmitter tx = new Transmitter(saOut);
+
+		tx.fskTransmitStdin( true,   // txInteractive
+							bfskDataRate,
+							bfskMarkF,
+							bfskSpaceF,
+							bfskNDataBits,
+							bfskNStartBits,
+							bfskNStopBits,
+							invertStartStop,
+							bfskMsbFirst,
+							bfskDoTxSyncBytes,
+							bfskSyncByte,
+							bfskDatabitsEncodeDecode,
+							txCarrier);
+		saOut.close();
 		return 0;
 	}
 
 	protected int receive() {
+		fLogger.info("Receiving ...");
 		return 0;
 	}
 
@@ -200,7 +250,7 @@ class Minimodem implements Callable<Integer> {
 				bfskNDataBits = 7;
 			} else if (dataBits.baudot5N1) {            // Baudot 5-N-1
 				bfskNDataBits = 5;
-				bfskDatabitsDecode = new DataBitsBaudot(baudotUSOS);
+				bfskDatabitsEncodeDecode = new DataBitsBaudot(baudotUSOS);
 			}
 		}
 		if(modemMode.equalsIgnoreCase("rtty")) {
@@ -221,7 +271,7 @@ class Minimodem implements Callable<Integer> {
 			bfskNStopBits = 0;
 			bfskDoRxSync = true;
 			bfskDoTxSyncBytes = 16;
-			bfskSyncByte = (byte)0xAB;
+			bfskSyncByte = 0xAB;
 			bfskMarkF = (float)(2083.0 + 1 / 3.0);
 			bfskSpaceF = 1562.5f;
 			bandWidth = bfskDataRate;
@@ -235,7 +285,7 @@ class Minimodem implements Callable<Integer> {
 			}
 			bfskDataRate = 1200f;
 			bfskNDataBits = 8;
-			bfskDatabitsDecode = new DataBitsCallerId();
+			bfskDatabitsEncodeDecode = new DataBitsCallerId();
 		} else if(modemMode.toLowerCase().startsWith("uic")) {
 			if(txMode.equals(SA_STREAM_PLAYBACK)) {
 				fLogger.fatal ("uic-751-3 --tx mode is not supported.");
@@ -252,9 +302,9 @@ class Minimodem implements Callable<Integer> {
 			expectNBits = 47;
 
 			if(modemMode.equalsIgnoreCase("uic-train")) {
-				bfskDatabitsDecode = new DataBitsUicGround2Train();
+				bfskDatabitsEncodeDecode = new DataBitsUicGround2Train();
 			} else if (modemMode.equalsIgnoreCase("uic-ground")) {
-				bfskDatabitsDecode = new DataBitsUicTrain2Ground();
+				bfskDatabitsEncodeDecode = new DataBitsUicTrain2Ground();
 			} else{
 				bfskDataRate = 0.0f;
 			}
@@ -277,7 +327,7 @@ class Minimodem implements Callable<Integer> {
 		}
 
 		if (outputModeBinary || outputModeRawNBits!=0) {
-			bfskDatabitsDecode = new DataBitsBinary();
+			bfskDatabitsEncodeDecode = new DataBitsBinary();
 		}
 		if (outputModeRawNBits!=0) {
 			bfskNStartBits = 0;

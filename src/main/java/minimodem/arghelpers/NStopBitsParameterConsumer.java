@@ -1,3 +1,8 @@
+/**
+ * minimodem4j
+ * picocli argument parser helper class
+ * Serves "--stopbits"
+ */
 package minimodem.arghelpers;
 
 import java.util.Stack;

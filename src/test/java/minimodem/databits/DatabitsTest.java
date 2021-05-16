@@ -2,8 +2,7 @@ package minimodem.databits;
 
 import org.junit.jupiter.api.Test;
 
-import static minimodem.databits.DataBitsBaudot.FIGS;
-import static minimodem.databits.DataBitsBaudot.LTRS;
+import static minimodem.databits.DataBitsBaudot.*;
 
 
 /**
@@ -61,6 +60,25 @@ public class DatabitsTest {
         assert(db.decode(dd,1,FIGS,8)==0);
         assert(db.decode(dd,1,0x1e,8)==1);
         assert(dd[0]==(byte)';');
-//        assert(db.decode(dd,10,0b10110010,8)==9);
+    }
+    @Test
+    public void USoSTest() {
+        IEncodeDecode db = new DataBitsBaudot(true);
+        byte[] dd = new byte[1];
+        assert(db.decode(dd,1,FIGS,8)==0);
+        assert(db.decode(dd,1,0x1e,8)==1);
+        assert(dd[0]==(byte)';');
+        assert(db.decode(dd,1,SPACE,8)==1);
+        assert(dd[0]==(byte)' ');
+        assert(db.decode(dd,1,0x19,8)==1);
+        assert(dd[0]==(byte)'B');
+        db = new DataBitsBaudot(false);
+        assert(db.decode(dd,1,FIGS,8)==0);
+        assert(db.decode(dd,1,0x1e,8)==1);
+        assert(dd[0]==(byte)';');
+        assert(db.decode(dd,1,SPACE,8)==1);
+        assert(dd[0]==(byte)' ');
+        assert(db.decode(dd,1,0x19,8)==1);
+        assert(dd[0]==(byte)'?');
     }
 }

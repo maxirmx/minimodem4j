@@ -1,3 +1,8 @@
+/**
+ * minimodem4j
+ * picocli argument parser helper class
+ * Serves "--auto-carrier"
+ */
 package minimodem.arghelpers;
 
 import java.util.Stack;

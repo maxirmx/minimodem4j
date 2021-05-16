@@ -1,3 +1,8 @@
+/**
+ * minimodem4j
+ * picocli argument parser helper class
+ * Serves parameters of Float type that shall be positive
+ */
 package minimodem.arghelpers;
 
 import picocli.CommandLine;

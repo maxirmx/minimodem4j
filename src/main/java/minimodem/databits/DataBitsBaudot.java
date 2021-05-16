@@ -11,6 +11,9 @@ import java.lang.Character;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+/**
+ * Radioteletype (RTTY) ASCII 5-bit data bits decoder/encoder
+ */
 public class DataBitsBaudot implements IEncodeDecode {
     private static final Logger fLogger = LogManager.getFormatterLogger(DataBitsBaudot.class);
 
@@ -159,27 +162,33 @@ public class DataBitsBaudot implements IEncodeDecode {
 
 
     /**
+     * charset
      * 0 unknown state
      * 1 LTRS state
      * 2 FIGS state
      */
+    private int charset = 0;       /* FIXME */
+
     protected final static int LTRS = 0x1F;
     protected final static int FIGS = 0x1B;
     protected final static int SPACE = 0x04;
 
-    private int charset = 0;       /* FIXME */
-
     /**
      * UnShift on space
+     * USOS is a convention whereby a SPACE also implies a switch to LETTERS character set.
+     * This switch can be used to disable USOS so that streams not adhering to this convention
+     * can be decoded correctly
      */
-    private boolean unshiftOnSpace;
+    private final boolean unshiftOnSpace;
 
+    /**
+     *  Reset baudot state
+     */
     private void reset() {
-        charset = 1;
+       charset = 1;
     }
 
-    public DataBitsBaudot(boolean usos)
-    {
+    public DataBitsBaudot(boolean usos) {
         unshiftOnSpace = usos;
     }
     /**
@@ -187,10 +196,42 @@ public class DataBitsBaudot implements IEncodeDecode {
      * or 0 if no output character was stuffed (in other words, returns
      * the count of characters decoded and stuffed).
      */
-    private int decodeInternal(byte[] charOutp, byte databits) {
-        /* Baudot (RTTY) */
+
+    /**
+     * Emits warning message on non-encodable character
+     * @param charOut non-encodable character
+     */
+    private void skipWarning(byte charOut) {
+        fLogger.warn("Skipping non-encodable character '%c' 0x%02x", (char)Byte.toUnsignedInt(charOut), Byte.toUnsignedInt(charOut));
+    }
+
+    /**
+     * Emits error message on non-encodable character
+     * @param charOut non decodable character
+     */
+    private void returnError(byte charOut) {
+        fLogger.error("Input character failed '%c' 0x%02x", (char)Byte.toUnsignedInt(charOut), charOut);
+        fLogger.error("charset==" + Integer.toUnsignedString(charset));
+    }
+    /**
+     * decode
+     * @param dataoutP the buffer for encoded data
+     *                 null value means processor reset, noop for this decoder
+     * @param dataoutSize the size of the buffer encoded data
+     * @param bits  the data to decode
+     * @param nDatabits  the number of bits to decode
+     * @return Returns 1 if dataoutP was stuffed with an output character
+     *         or 0 if no output character was stuffed (in other words, returns
+     *        the count of characters decoded and stuffed).
+    */
+    public int decode(byte[] dataoutP, int dataoutSize, long bits, int nDatabits) {
+        if(dataoutP == null) {                // reset Baudot state
+                        reset();
+            return 0;
+        }
 
         int stuffChar = 1;
+        byte databits = (byte) (bits & 0x1F);
         if (Byte.toUnsignedInt(databits) == FIGS) {
             charset = 2;
             stuffChar = 0;
@@ -205,37 +246,17 @@ public class DataBitsBaudot implements IEncodeDecode {
             int t;
             if (charset == 1)        { t = 0; }
             else                     { t = 1; }  // U.S. figs
-                                    // t = 2;	// CCITT figs
-            charOutp[0] = decodeTable[Byte.toUnsignedInt(databits)][t];
+            // t = 2;	// CCITT figs
+            dataoutP[0] = decodeTable[Byte.toUnsignedInt(databits)][t];
         }
         return stuffChar;
     }
 
     /**
-     * baudotSkipWarning
-     * Emits warning message on non-encodable character
-     */
-
-    private void skipWarning(byte charOut) {
-        fLogger.warn("Skipping non-encodable character '%c' 0x%02x", (char)Byte.toUnsignedInt(charOut), Byte.toUnsignedInt(charOut));
-    }
-
-    private void returnError(byte charOut) {
-        fLogger.error("Input character failed '%c' 0x%02x", (char)Byte.toUnsignedInt(charOut), charOut);
-        fLogger.error("charset==" + Integer.toUnsignedString(charset));
-    }
-
-    public int decode(byte[] dataoutP, int dataoutSize, long bits, int nDatabits) {
-        if(dataoutP == null) {
-            // databits processor reset: reset Baudot state
-            reset();
-            return 0;
-        }
-        return decodeInternal(dataoutP, (byte) (bits & 0x1F));
-    }
-
-    /**
-     * Returns the number of 5-bit data words stuffed into *databits_outp (1 or 2)
+     * encode
+     * @param databitsOutp  the buffer for encoded data
+     * @param charOut  a byte to encode
+     * @return the number of 5-bit data words stuffed into *databits_outp (1 or 2)
      */
     public int encode(int[] databitsOutp, byte charOut) {
         charOut = (byte)Character.toUpperCase(charOut);
@@ -243,16 +264,11 @@ public class DataBitsBaudot implements IEncodeDecode {
             skipWarning(charOut);
             return 0;
         }
-
         byte ind = (byte) Byte.toUnsignedInt (charOut);
-
         int n = 0;
-
         byte charsetMask = encodeTable[Byte.toUnsignedInt(ind)][1];
-
         fLogger.trace("(charset==%d)   input character '%c' 0x%02x charsetMask=%d",
                 charset, charOut, charOut, charsetMask);
-
         if ((charset & Byte.toUnsignedInt(charsetMask)) == 0) {
             if (Byte.toUnsignedInt(charsetMask) == 0) {
                 skipWarning(charOut);
@@ -260,7 +276,6 @@ public class DataBitsBaudot implements IEncodeDecode {
             }
 
             if (charset == 0) { charset = 1; }
-
             if (Byte.toUnsignedInt(charsetMask) != 3) { charset = Byte.toUnsignedInt(charsetMask); }
 
             if      (charset == 1)      {  databitsOutp[n++] = LTRS; }

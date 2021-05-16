@@ -18,8 +18,8 @@ import java.nio.channels.FileChannel;
 import static minimodem.simpleaudio.SaDirection.*;
 
 
-public class AudioFile extends SimpleAudio {
-    private static final Logger fLogger = LogManager.getFormatterLogger(AudioFile.class);
+public class SaAudioFile extends SimpleAudio {
+    private static final Logger fLogger = LogManager.getFormatterLogger(SaAudioFile.class);
 
     protected SaDirection direction;
     protected AudioFileFormat.Type type = null;
@@ -60,6 +60,7 @@ public class AudioFile extends SimpleAudio {
 
     public boolean close()
     {
+        boolean res = false;
         try {
             fTmpChannel.close();
             FileInputStream fInStream = new FileInputStream(fTmpOut);
@@ -67,9 +68,12 @@ public class AudioFile extends SimpleAudio {
             AudioSystem.write(aStream, type, fOut);
             fInStream.close();
         } catch (IOException ex) {
-            fLogger.error("Failed to write output file '%s'", fOut.getPath());
+            fLogger.error("Failed to write output file '%s' [%s]", fOut.getPath(), ex.getLocalizedMessage());
+        } catch (IllegalArgumentException ex) {
+            fLogger.error("Failed to write output file '%s [%s]", fOut.getPath(), ex.getLocalizedMessage());
         }
-        return clean();
+        clean();
+        return res;
     }
 
     public int write(ByteBuffer byteBuf, int nframes) {
