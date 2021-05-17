@@ -59,7 +59,7 @@ public class SaAudioFile extends SimpleAudio {
             return false;
         }
 
-        if (direction == SA_STREAM_RECORD) {
+        if (direction == SA_TRANSMIT) {
             try {
                 fTmpOut = File.createTempFile("minimodem-", ".tmp");
                 fTmpChannel = new FileOutputStream(fTmpOut, false).getChannel();
@@ -92,7 +92,7 @@ public class SaAudioFile extends SimpleAudio {
     }
 
     public int write(ByteBuffer byteBuf, int nframes) {
-        if (direction == SA_STREAM_PLAYBACK) {
+        if (direction == SA_RECEIVE) {
             fLogger.error("FCannot read from file '%s' which is open for playback", fOut.getPath());
             return 0;
         }
@@ -107,7 +107,7 @@ public class SaAudioFile extends SimpleAudio {
     }
 
     public int read(ByteBuffer byteBuf, int nframes) {
-        if (direction == SA_STREAM_RECORD) {
+        if (direction == SA_TRANSMIT) {
             fLogger.error("FCannot read from file '%s' which is open for recording", fOut.getPath());
         }
         return 0;

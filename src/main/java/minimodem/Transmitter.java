@@ -10,21 +10,23 @@ import java.io.IOException;
 public class Transmitter {
     private static final Logger fLogger = LogManager.getFormatterLogger("Transmitter");
 
-    private SimpleAudio txSaOut;                // Output stream
+    private final SimpleAudio txSaOut;
+    private final SaToneGenerator txToneGenerator;
+    private final boolean txPrintEot;
+
     private static int txFlushNsamples = 0;
 
     private int txTransmitting = 0;
-    public static boolean txPrintEot = false;
     public static int txLeaderBitsLen = 2;
     public static int txTrailerBitsLen = 2;
     public static float txBfskMarkF;
     private int txBitNsamples;
 
-    private SaToneGenerator toneGenerator;
 
-    public Transmitter(SimpleAudio saOut) {
+    public Transmitter(SimpleAudio saOut, SaToneGenerator saTone, boolean printEot) {
         txSaOut = saOut;
-        toneGenerator = new SaToneGenerator();
+        txToneGenerator = saTone;
+        txPrintEot = printEot;
     }
 
     /**
@@ -34,7 +36,7 @@ public class Transmitter {
                                   float bfskNstartbits, float bfskNstopbits, boolean invertStartStop, boolean bfskMsbFirst) {
         int i;
         if(bfskNstartbits > 0) {
-            toneGenerator.Tone(txSaOut, invertStartStop ? bfskMarkF : bfskSpaceF, (int) (bitNsamples * bfskNstartbits));
+            txToneGenerator.Tone(txSaOut, invertStartStop ? bfskMarkF : bfskSpaceF, (int) (bitNsamples * bfskNstartbits));
         }
         for(i = 0; i<nDataBits; i++) {
             // data
@@ -46,10 +48,10 @@ public class Transmitter {
             }
 
             float toneFreq = bit_U == 1 ? bfskMarkF : bfskSpaceF;
-            toneGenerator.Tone(txSaOut, toneFreq, bitNsamples);
+            txToneGenerator.Tone(txSaOut, toneFreq, bitNsamples);
         }
         if(bfskNstopbits > 0) {
-            toneGenerator.Tone(txSaOut, invertStartStop ? bfskSpaceF : bfskMarkF, (int) (bitNsamples * bfskNstopbits)); // stop
+            txToneGenerator.Tone(txSaOut, invertStartStop ? bfskSpaceF : bfskMarkF, (int) (bitNsamples * bfskNstopbits)); // stop
         }
     }
 
@@ -88,7 +90,7 @@ public class Transmitter {
                          txTransmitting = 1;
                          /* emit leader tone (mark) */
                          for (j = 0; j < txLeaderBitsLen; j++) {
-                             toneGenerator.Tone(txSaOut, invertStartStop ? bfskSpaceF : bfskMarkF, txBitNsamples);
+                             txToneGenerator.Tone(txSaOut, invertStartStop ? bfskSpaceF : bfskMarkF, txBitNsamples);
                          }
                      }
                      if(txTransmitting < 2) {
@@ -119,11 +121,11 @@ public class Transmitter {
 
     private void txStopTransmitHandler() {
         for(int j = 0; j < txTrailerBitsLen; j++) {
-            toneGenerator.Tone(txSaOut, txBfskMarkF, txBitNsamples);
+            txToneGenerator.Tone(txSaOut, txBfskMarkF, txBitNsamples);
         }
 
         if(txFlushNsamples != 0) {
-            toneGenerator.Tone(txSaOut, 0, txFlushNsamples);
+            txToneGenerator.Tone(txSaOut, 0, txFlushNsamples);
         }
 
         txTransmitting = 0;

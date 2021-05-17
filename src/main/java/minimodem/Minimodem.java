@@ -31,7 +31,8 @@ class Minimodem implements Callable<Integer> {
 		@Option(names = {"-t", "--tx", "--transmit", "--write"}, required = true) 		protected boolean oTx = false;
 		@Option(names = {"-r", "--rx", "--receive", "--read"}, required = true) 		protected boolean oRx = false;
 	}
-	@CommandLine.ArgGroup() 						protected OpMode opMode;
+	@CommandLine.ArgGroup()
+	protected OpMode opMode;
 	@Option(names = {"-c", "--confidence"}, paramLabel = "{min-confidence-threshold}", defaultValue = "1.5f",
 			description = "Signal-to-noise squelch control, The minimum SNR-ish confidence level seen as 'a signal'")
 			protected float fskConfidenceThreshold;
@@ -55,7 +56,8 @@ class Minimodem implements Callable<Integer> {
 		@Option(names = {"-7"}, description = "ASCII 7-N-1") 				protected boolean ascii7N1 = false;
 		@Option(names = {"-5", "--baudot"}, description = "Baudot 5-N-1") 	protected boolean baudot5N1 = false;
 	}
-	@CommandLine.ArgGroup() 												protected DataBits dataBits;
+	@CommandLine.ArgGroup()
+	protected DataBits dataBits;
 	@Option(names = {"-u", "--usos"},  paramLabel = "{0|1}",
 			description="Enable or disable USOS (UnShift on Space) for baudot (defaule: 1, i.e.: enable). +" +
 					" USOS is a convention whereby a SPACE also implies a switch to LETTERS character " +
@@ -128,7 +130,9 @@ class Minimodem implements Callable<Integer> {
 					" or a multiple of 10. (This option applies to --rx mode only).")
 			protected int outputModeRawNBits=0;
 	@Option(names = {"--print-filter"})													protected boolean oPrintFilter;
-	@Option(names = {"--print-eot"})													protected boolean oPrintEot;
+	@Option(names = {"--print-eot"},
+			description="Print '### EOT' to log after each transmit completes." )
+			protected boolean txPrintEot = false;
 	@Option(names = {"--Xrxnoise"}, paramLabel = "{rx-noise-factor}")					protected boolean oXrxNoise;
 	@Option(names = {"--tx-carrier"},
 			description="When transmitting from a blocking source, keep a carrier going while waiting " +
@@ -171,6 +175,7 @@ class Minimodem implements Callable<Integer> {
 	 * @param args as usual :)
 	 */
 	public static void main(String... args) {
+		fLogger.info("Running minimodem4j ...");
 		int exitCode = new CommandLine(new Minimodem()).execute(args);
 		System.exit(exitCode);
 	}
@@ -181,35 +186,33 @@ class Minimodem implements Callable<Integer> {
 	 */
 	@Override
 	public Integer call() {
-		fLogger.info("Running minimodem4j ...");
-
-		int quietMode = 0;
-		int outputPrintFilter = 0;
-
-		fLogger.info("Configuring minimodem4j ...");
+		fLogger.info("Configuring ...");
 		int cfgRc = configure();
 		if (cfgRc != 0) {
 			return cfgRc;
 		}
-		return (txMode.equals(SA_STREAM_PLAYBACK))?transmit():receive();
+		return (txMode.equals(SA_RECEIVE))?transmit():receive();
 	}
 
 	protected int transmit() {
-		fLogger.info("Transmitting ...");
-		SaToneGenerator.toneInit(txSinTableLen, txAmplitude);
+		SaToneGenerator toneGenerator = new SaToneGenerator();
+		toneGenerator.toneInit(txSinTableLen, txAmplitude);
+		fLogger.info("Tone Generator is ready");
 
 		SaAudioFile saOut = new SaAudioFile();
 		if (!saOut.open(file,
 				floatSamples?PCM_FLOAT:PCM_SIGNED,
-				SA_STREAM_RECORD,
+				SA_TRANSMIT,
 				sampleRate,
 				nChannels,
 				bfskMsbFirst)) {
 			return -1;
 		}
 
-		Transmitter tx = new Transmitter(saOut);
+		fLogger.info("Audio file is ready");
 
+		fLogger.info("Transmitting ...");
+		Transmitter tx = new Transmitter(saOut, toneGenerator, txPrintEot);
 		tx.fskTransmitStdin( false,   // txInteractive
 							bfskDataRate,
 							bfskMarkF,
@@ -229,6 +232,15 @@ class Minimodem implements Callable<Integer> {
 
 	protected int receive() {
 		fLogger.info("Receiving ...");
+		SaAudioFile saOut = new SaAudioFile();
+		if (!saOut.open(file,
+				floatSamples?PCM_FLOAT:PCM_SIGNED,
+				SA_RECEIVE,
+				sampleRate,
+				nChannels,
+				bfskMsbFirst)) {
+			return -1;
+		}
 		return 0;
 	}
 
@@ -239,9 +251,9 @@ class Minimodem implements Callable<Integer> {
 	 */
 	protected int configure() {
 		if (opMode != null && opMode.oTx) {
-			txMode = SA_STREAM_PLAYBACK;
+			txMode = SA_RECEIVE;
 		} else {
-			txMode = SA_STREAM_RECORD;
+			txMode = SA_TRANSMIT;
 		}
 		if (dataBits != null) {
 			if (dataBits.ascii8N1) {                    // ASCII 8-N-1
@@ -276,7 +288,7 @@ class Minimodem implements Callable<Integer> {
 			bfskSpaceF = 1562.5f;
 			bandWidth = bfskDataRate;
 		} else if(modemMode.equalsIgnoreCase("caller")) {
-			if(txMode.equals(SA_STREAM_PLAYBACK)){
+			if(txMode.equals(SA_RECEIVE)){
 				fLogger.fatal ("callerid --tx mode is not supported.");
 				return 1;
 			}
@@ -287,7 +299,7 @@ class Minimodem implements Callable<Integer> {
 			bfskNDataBits = 8;
 			bfskDatabitsEncodeDecode = new DataBitsCallerId();
 		} else if(modemMode.toLowerCase().startsWith("uic")) {
-			if(txMode.equals(SA_STREAM_PLAYBACK)) {
+			if(txMode.equals(SA_RECEIVE)) {
 				fLogger.fatal ("uic-751-3 --tx mode is not supported.");
 				return 1;
 			}

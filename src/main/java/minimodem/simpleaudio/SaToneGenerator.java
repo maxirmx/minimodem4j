@@ -9,8 +9,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.nio.FloatBuffer;
-import java.nio.ShortBuffer;
 
 import static javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT;
 import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
@@ -19,16 +17,17 @@ public class SaToneGenerator {
     private static final Logger fLogger = LogManager.getFormatterLogger(SaToneGenerator.class);
 
     /**
-     * Precompiled sin table(s)
+     * Precompiled sine table(s)
      * sinTableFloat  -- as floats (-1.0 to 1.0)
      * sinTableShort  -- as shorts (-32767 to +32767)
      * sinTableLen    -- table length
      */
-    private static int sinTableLen;
-    private static short[] sinTableShort;
-    private static float[] sinTableFloat;
+    private int sinTableLen;
+    private short[] sinTableShort;
+    private float[] sinTableFloat;
 
-    private static float toneMag = 1.0f;
+    private float toneMagFloat = 1.0f;
+    private short toneMagShort = (short) (0.5f);
     private float saToneCphase = 0.0f;
 
     /**
@@ -45,22 +44,22 @@ public class SaToneGenerator {
     }
 
     /**
-     * Table value (approximation) of sin(turns) as signed short
+     * Table value (approximation) of sine(turns) as signed short
      * @param turns  (0.0 to 1.0)
-     * @return sin (-32767 to +32767)
+     * @return sine (-32767 to +32767)
      */
-    private static short sinLuShort(float turns) {
+    private short sinLuShort(float turns) {
         int t = (int) (sinTableLen * turns + 0.5f);
         t = Integer.remainderUnsigned(t, sinTableLen);
         return sinTableShort[t];
     }
 
     /**
-     * Table value (approximation) of sin(turns) as float
+     * Table value (approximation) of sine(turns) as float
      * @param turns (0.0 to 1.0)
      * @return -1.0 to +1.0
      */
-    private static float sinLuFloat(float turns) {
+    private float sinLuFloat(float turns) {
         int t = (int) (sinTableLen * turns + 0.5f);
         t = Integer.remainderUnsigned(t, sinTableLen);
         return sinTableFloat[t];
@@ -74,27 +73,31 @@ public class SaToneGenerator {
         return (float) Math.PI * 2 * turns;
     }
 
-
-    public static void toneInit(int newSinTableLen, float mag) {
+    /**
+     * Initialize or drop sine lookup table
+     * @param newSinTableLen table size
+     * @param mag signal magnitude
+     */
+    public void toneInit(int newSinTableLen, float mag) {
         sinTableLen = newSinTableLen;
-        toneMag = mag;
+        toneMagFloat = mag;
 
         if (sinTableLen != 0) {
             sinTableShort = new short[sinTableLen];
             sinTableFloat = new float[sinTableLen];
 
-            short magS = (short) (32767.0f * toneMag + 0.5f);
-            if (toneMag > 1.0f) {  /* clamp to 1.0 to avoid overflow */
-                magS = 32767;
+            toneMagShort = (short) (32767.0f * toneMagFloat + 0.5f);
+            if (toneMagFloat > 1.0f) {  /* clamp to 1.0 to avoid overflow */
+                toneMagShort = 32767;
             }
-            if (Short.toUnsignedInt(magS) < 1) { /* "short epsilon" */
-                magS = 1;
-            }
-            for (int i = 0; i < sinTableLen; i++) {
-                sinTableShort[i] = lroundf(magS * (float) Math.sin((float) Math.PI * 2 * i / sinTableLen));
+            if (Short.toUnsignedInt(toneMagShort) < 1) { /* "short epsilon" */
+                toneMagShort = 1;
             }
             for (int i = 0; i < sinTableLen; i++) {
-                sinTableFloat[i] = toneMag * (float) Math.sin((float) Math.PI * 2 * i / sinTableLen);
+                sinTableShort[i] = lroundf(toneMagShort * (float) Math.sin((float) Math.PI * 2 * i / sinTableLen));
+            }
+            for (int i = 0; i < sinTableLen; i++) {
+                sinTableFloat[i] = toneMagFloat * (float) Math.sin((float) Math.PI * 2 * i / sinTableLen);
             }
         } else {
             if (sinTableShort != null) {
@@ -106,14 +109,12 @@ public class SaToneGenerator {
         }
     }
 
-    public float sinePhaseTurns(int i, float waveNsamples) {
-        return (float) i / waveNsamples + saToneCphase;
-    }
-
-    public float sinePhaseRadians(int i, float waveNsamples) {
-        return turnsToRadians(sinePhaseTurns(i, waveNsamples));
-    }
-
+    /**
+     * Emit tone
+     * @param saOut         Audio device
+     * @param toneFreq      frequency
+     * @param nsamplesDur   duration (the number of samples)
+     */
     public void Tone(SimpleAudio saOut, float toneFreq, int nsamplesDur) {
         int framesize = saOut.getBackendFramesize();
         ByteBuffer byteBuf = ByteBuffer.allocateDirect(nsamplesDur * framesize);
@@ -128,7 +129,7 @@ public class SaToneGenerator {
                     }
                 } else {
                     for (i = 0; i < nsamplesDur; i++) {
-                        putFloat(byteBuf, (float) (toneMag * Math.sin(sinePhaseRadians(i, waveNsamples))));
+                        putFloat(byteBuf, (float) (toneMagFloat * Math.sin(sinePhaseRadians(i, waveNsamples))));
                     }
                 }
             } else if (saOut.getEncoding().equals(PCM_SIGNED)) {
@@ -137,15 +138,8 @@ public class SaToneGenerator {
                             putShort(byteBuf, sinLuShort(sinePhaseTurns(i, waveNsamples)));
                         }
                     } else {
-                        short magS = (short) (32767.0f * toneMag + 0.5f);
-                        if (toneMag > 1.0f) { /* clamp to 1.0 to avoid overflow */
-                            magS = 32767;
-                        }
-                        if (magS < 1) { /* "short epsilon" */
-                            magS = 1;
-                        }
                         for (i = 0; i < nsamplesDur; i++) {
-                            putShort(byteBuf, lroundf((float) (magS * Math.sin(sinePhaseRadians(i, waveNsamples)))));
+                            putShort(byteBuf, lroundf((float) (toneMagShort * Math.sin(sinePhaseRadians(i, waveNsamples)))));
                         }
                     }
             } else {
@@ -161,11 +155,21 @@ public class SaToneGenerator {
         saOut.write(byteBuf, nsamplesDur);
     }
 
-    private void putShort(ByteBuffer buf, short v) {
+    /**
+     * Puts short value to byte buffer. LSB first
+     * @param buf  buffer
+     * @param v value to put
+     */
+    private static void putShort(ByteBuffer buf, short v) {
         buf.put((byte) v).
-            put((byte) (v >> 8));
+           put((byte) (v >> 8));
     }
 
+   /**
+    * Puts float value to byte buffer. LSB first
+    * @param buf  buffer
+    * @param v value to put
+    */
     private static void putFloat(ByteBuffer buf, float v) {
         int intBits =  Float.floatToIntBits(v);
         buf.put((byte)  intBits).
@@ -173,6 +177,27 @@ public class SaToneGenerator {
             put((byte) (intBits >> 16)).
             put((byte) (intBits >> 24));
     }
+
+    /**
+     *
+     * @param i
+     * @param waveNsamples
+     * @return
+     */
+    public float sinePhaseTurns(int i, float waveNsamples) {
+        return (float) i / waveNsamples + saToneCphase;
+    }
+
+    /**
+     *
+     * @param i
+     * @param waveNsamples
+     * @return
+     */
+    public float sinePhaseRadians(int i, float waveNsamples) {
+        return turnsToRadians(sinePhaseTurns(i, waveNsamples));
+    }
+
 }
 
 
