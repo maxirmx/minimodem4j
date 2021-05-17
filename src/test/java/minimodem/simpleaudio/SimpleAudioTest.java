@@ -33,8 +33,10 @@ public class SimpleAudioTest {
     @Test
     public void AfNaiveWriteTst() {
         SaAudioFile f = new SaAudioFile();
-        assert (f.open(new File("some.wav"), PCM_FLOAT, SA_STREAM_RECORD, 48000, 1, false));
-        ByteBuffer buf = ByteBuffer.allocateDirect(5);
+        File fOut = new File("some.wav");
+        fOut.deleteOnExit();
+        assert (f.open(fOut, PCM_FLOAT, SA_STREAM_RECORD, 48000, 1, false));
+        ByteBuffer buf = ByteBuffer.allocateDirect(4);
         buf.put((byte) '1').put((byte) '2').put((byte) '3').put((byte) '4');
         assert (f.write(buf, 0) == 4);
         f.close();

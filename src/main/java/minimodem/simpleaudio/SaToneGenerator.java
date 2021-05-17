@@ -124,17 +124,17 @@ public class SaToneGenerator {
             if (saOut.getEncoding().equals(PCM_FLOAT)) {
                 if (sinTableFloat != null) {
                     for (i = 0; i < nsamplesDur; i++) {
-                        byteBuf.putFloat(sinLuFloat(sinePhaseTurns(i, waveNsamples)));
+                        putFloat(byteBuf, sinLuFloat(sinePhaseTurns(i, waveNsamples)));
                     }
                 } else {
                     for (i = 0; i < nsamplesDur; i++) {
-                        byteBuf.putFloat((float) (toneMag * Math.sin(sinePhaseRadians(i, waveNsamples))));
+                        putFloat(byteBuf, (float) (toneMag * Math.sin(sinePhaseRadians(i, waveNsamples))));
                     }
                 }
             } else if (saOut.getEncoding().equals(PCM_SIGNED)) {
                     if (sinTableShort != null) {
                         for (i = 0; i < nsamplesDur; i++) {
-                            byteBuf.putShort(sinLuShort(sinePhaseTurns(i, waveNsamples)));
+                            putShort(byteBuf, sinLuShort(sinePhaseTurns(i, waveNsamples)));
                         }
                     } else {
                         short magS = (short) (32767.0f * toneMag + 0.5f);
@@ -145,7 +145,7 @@ public class SaToneGenerator {
                             magS = 1;
                         }
                         for (i = 0; i < nsamplesDur; i++) {
-                            byteBuf.putShort(lroundf((float) (magS * Math.sin(sinePhaseRadians(i, waveNsamples)))));
+                            putShort(byteBuf, lroundf((float) (magS * Math.sin(sinePhaseRadians(i, waveNsamples)))));
                         }
                     }
             } else {
@@ -158,8 +158,20 @@ public class SaToneGenerator {
             }
             saToneCphase = 0.0f;
         }
-
         saOut.write(byteBuf, nsamplesDur);
+    }
+
+    private void putShort(ByteBuffer buf, short v) {
+        buf.put((byte) v).
+            put((byte) (v >> 8));
+    }
+
+    private static void putFloat(ByteBuffer buf, float v) {
+        int intBits =  Float.floatToIntBits(v);
+        buf.put((byte)  intBits).
+            put((byte) (intBits >> 8)).
+            put((byte) (intBits >> 16)).
+            put((byte) (intBits >> 24));
     }
 }
 

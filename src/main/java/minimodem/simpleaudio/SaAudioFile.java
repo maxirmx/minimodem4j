@@ -79,7 +79,7 @@ public class SaAudioFile extends SimpleAudio {
         try {
             fTmpChannel.close();
             FileInputStream fInStream = new FileInputStream(fTmpOut);
-            AudioInputStream aStream = new AudioInputStream(fInStream, aFormat, fTmpOut.length());
+            AudioInputStream aStream = new AudioInputStream(fInStream, aFormat, fTmpOut.length()/getBackendFramesize());
             AudioSystem.write(aStream, type, fOut);
             fInStream.close();
         } catch (IOException ex) {
@@ -97,7 +97,7 @@ public class SaAudioFile extends SimpleAudio {
             return 0;
         }
         int ret = 0;
-        byteBuf.flip();
+        byteBuf.rewind();
         try {
             ret = fTmpChannel.write(byteBuf);
         } catch (IOException ex) {
