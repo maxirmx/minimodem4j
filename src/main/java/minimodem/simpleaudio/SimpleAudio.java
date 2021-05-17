@@ -66,8 +66,8 @@ public abstract class SimpleAudio {
 
         aFormat = new AudioFormat(encoding,     /* The audio encoding technique: PCM_SIGNED or PCM_FLOAT */
                 sampleRate,                     /* The number of samples per second */
-                encoding == PCM_SIGNED ? 8 /* size of short in bits */ :
-                                        16 /* size of float in bits */,    /* The number of bits in each sample */
+                encoding == PCM_SIGNED ? 16 /* size of short in bits */ :
+                                         32 /* size of float in bits */,    /* The number of bits in each sample */
                 nChannels,                     /* The number of channels */
                 nChannels * (encoding == PCM_SIGNED ? 2: 4), /* The number of bytes in each frame */
                 sampleRate/nChannels, /* The number of frames per second */

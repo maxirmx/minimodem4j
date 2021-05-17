@@ -13,12 +13,12 @@ public class Transmitter {
     private SimpleAudio txSaOut;                // Output stream
     private static int txFlushNsamples = 0;
 
-    public int txTransmitting = 0;
+    private int txTransmitting = 0;
     public static boolean txPrintEot = false;
     public static int txLeaderBitsLen = 2;
     public static int txTrailerBitsLen = 2;
     public static float txBfskMarkF;
-    public static int txBitNsamples_U;
+    private int txBitNsamples;
 
     private SaToneGenerator toneGenerator;
 
@@ -64,11 +64,11 @@ public class Transmitter {
                                  boolean bfskMsbFirst,
                                  int bfskDoTxSyncBytes,
                                  int bfskSyncByte,
-                                 IEncodeDecode encode,
+                                 IEncodeDecode encoder,
                                  boolean txcarrier)
     {
         txBfskMarkF = bfskMarkF;
-        int bitNsamples = (int) (txSaOut.getRate() / dataRate + 0.5f);
+        txBitNsamples = (int) (txSaOut.getRate() / dataRate + 0.5f);
         if ( txInteractive )
             txFlushNsamples = txSaOut.getRate()/2; // 0.5 sec of zero samples to flush
         else
@@ -76,34 +76,33 @@ public class Transmitter {
 
 
         boolean endOfFile = false;
-        while (!endOfFile)
-        {   int nextByte;
+        while (!endOfFile) {
+            int nextByte;
             try {
                  nextByte = System.in.read();
                  if (nextByte != -1) {
                      int[] bits = new int[2];
                      int j;
-                     int nwords = encode.encode(bits,(byte)(nextByte&0xFF));
+                     int nwords = encoder.encode(bits,(byte)(nextByte&0xFF));
                      if(txTransmitting == 0) {
                          txTransmitting = 1;
                          /* emit leader tone (mark) */
-                         for(j = 0; j<txLeaderBitsLen; j++) {
-                             toneGenerator.Tone(txSaOut, invertStartStop ? bfskSpaceF : bfskMarkF, bitNsamples);
+                         for (j = 0; j < txLeaderBitsLen; j++) {
+                             toneGenerator.Tone(txSaOut, invertStartStop ? bfskSpaceF : bfskMarkF, txBitNsamples);
                          }
-                         if(txTransmitting < 2) {
-                             txTransmitting = 2;
-                             /* emit "preamble" of sync bytes */
-                             for(j = 0; j<bfskDoTxSyncBytes; j++) {
-                                 fskTransmitFrame(bfskSyncByte, nDataBits, bitNsamples, bfskMarkF, bfskSpaceF,
-                                                  bfskNstartbits, bfskNstopbits, invertStartStop, bfskMsbFirst);
-                             }
-                             /* emit data bits */
-                             for(j = 0; j<nwords; j++) {
-                                 fskTransmitFrame(bits[j], nDataBits, bitNsamples, bfskMarkF, bfskSpaceF, bfskNstartbits,
+                     }
+                     if(txTransmitting < 2) {
+                         txTransmitting = 2;
+                         /* emit "preamble" of sync bytes */
+                         for (j = 0; j < bfskDoTxSyncBytes; j++) {
+                             fskTransmitFrame(bfskSyncByte, nDataBits, txBitNsamples, bfskMarkF, bfskSpaceF,
+                                     bfskNstartbits, bfskNstopbits, invertStartStop, bfskMsbFirst);
+                         }
+                     }
+                     /* emit data bits */
+                     for(j = 0; j<nwords; j++) {
+                         fskTransmitFrame(bits[j], nDataBits, txBitNsamples, bfskMarkF, bfskSpaceF, bfskNstartbits,
                                          bfskNstopbits, invertStartStop, bfskMsbFirst);
-                             }
-
-                         }
                      }
                  }
                  else {
@@ -113,12 +112,14 @@ public class Transmitter {
                 endOfFile = true;
             }
         }
+        if (txTransmitting !=0) {
+            txStopTransmitHandler();
+        }
     }
 
-
-    public void txStopTransmitSighandler(int sig) {
+    private void txStopTransmitHandler() {
         for(int j = 0; j < txTrailerBitsLen; j++) {
-            toneGenerator.Tone(txSaOut, txBfskMarkF, txBitNsamples_U);
+            toneGenerator.Tone(txSaOut, txBfskMarkF, txBitNsamples);
         }
 
         if(txFlushNsamples != 0) {

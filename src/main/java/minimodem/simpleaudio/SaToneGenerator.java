@@ -1,3 +1,8 @@
+/**
+ * minimodem4j
+ * SaToneGenerator.java
+ * Created from simple-tone-generator.c, simpleaudio.h @ https://github.com/kamalmostafa/minimodem
+ */
 package minimodem.simpleaudio;
 
 import org.apache.logging.log4j.LogManager;
@@ -13,15 +18,21 @@ import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
 public class SaToneGenerator {
     private static final Logger fLogger = LogManager.getFormatterLogger(SaToneGenerator.class);
 
-    private static float toneMag = 1.0f;
+    /**
+     * Precompiled sin table(s)
+     * sinTableFloat  -- as floats (-1.0 to 1.0)
+     * sinTableShort  -- as shorts (-32767 to +32767)
+     * sinTableLen    -- table length
+     */
     private static int sinTableLen;
     private static short[] sinTableShort;
     private static float[] sinTableFloat;
+
+    private static float toneMag = 1.0f;
     private float saToneCphase = 0.0f;
 
     /**
-     * lroundf
-     * ( Halfway values are rounded away from zero )
+     * lroundf Equivalent of C99 function - Halfway values are rounded away from zero
      * @param v - a value to round
      * @return rounded value
      */
@@ -34,7 +45,9 @@ public class SaToneGenerator {
     }
 
     /**
-     * in: turns (0.0 to 1.0)    out: (-32767 to +32767)
+     * Table value (approximation) of sin(turns) as signed short
+     * @param turns  (0.0 to 1.0)
+     * @return sin (-32767 to +32767)
      */
     private static short sinLuShort(float turns) {
         int t = (int) (sinTableLen * turns + 0.5f);
@@ -43,16 +56,22 @@ public class SaToneGenerator {
     }
 
     /**
-     * in: turns (0.0 to 1.0)    out: -1.0 to +1.0
+     * Table value (approximation) of sin(turns) as float
+     * @param turns (0.0 to 1.0)
+     * @return -1.0 to +1.0
      */
     private static float sinLuFloat(float turns) {
         int t = (int) (sinTableLen * turns + 0.5f);
         t = Integer.remainderUnsigned(t, sinTableLen);
         return sinTableFloat[t];
     }
-
-    public static float turnsToRadians(float t) {
-        return (float) Math.PI * 2 * t;
+    /**
+     * Convert turns to radians
+     * @param turns (0.0 to 1.0)
+     * @return radians
+     */
+    public static float turnsToRadians(float turns) {
+        return (float) Math.PI * 2 * turns;
     }
 
 

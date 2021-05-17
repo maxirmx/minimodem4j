@@ -27,7 +27,22 @@ public class SaAudioFile extends SimpleAudio {
     protected File fOut = null;
     protected FileChannel fTmpChannel = null;
 
-    public boolean open(File f, AudioFormat.Encoding enc, SaDirection dir, int sampleRate, int nChannels, boolean bfskMsbFirst) {
+    /**
+     * Opens file
+     * @param f File object to open
+     * @param enc encoding (Java sampled audio AudioFormat.Encoding)
+     * @param dir operation direction (PLAYBACK or RECORD)
+     * @param sampleRate  sample rate
+     * @param nChannels  the number of channels (actually only 1 is supported)
+     * @param bfskMsbFirst  Big endian flag. This shall match audio file format specification
+     * @return
+     */
+    public boolean open(File f, AudioFormat.Encoding enc, SaDirection dir,
+                        int sampleRate, int nChannels, boolean bfskMsbFirst) {
+        if (f==null) {
+            fLogger.error("No file specified.");
+            return false;
+        }
         clean();
         direction = dir;
         fOut = f;

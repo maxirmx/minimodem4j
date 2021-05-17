@@ -210,7 +210,7 @@ class Minimodem implements Callable<Integer> {
 
 		Transmitter tx = new Transmitter(saOut);
 
-		tx.fskTransmitStdin( true,   // txInteractive
+		tx.fskTransmitStdin( false,   // txInteractive
 							bfskDataRate,
 							bfskMarkF,
 							bfskSpaceF,
