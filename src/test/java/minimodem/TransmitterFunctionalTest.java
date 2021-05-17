@@ -71,12 +71,12 @@ public class TransmitterFunctionalTest {
         runTest(fIn, fSample);
     }
 
-//    @Test
-//    public void Test3() {
-//        File fIn = new File(this.getClass().getResource("/Test3/test_output.txt").getFile());
-//        File fSample = new File(this.getClass().getResource("/Test3/test_input.wav").getFile());
-//        runTest(fIn, fSample);
-//    }
+    @Test
+    public void Test3() {
+        File fIn = new File(this.getClass().getResource("/Test3/test_output.txt").getFile());
+        File fSample = new File(this.getClass().getResource("/Test3/test_input.wav").getFile());
+        runTest(fIn, fSample);
+    }
 
     @Test
     public void Test4() {

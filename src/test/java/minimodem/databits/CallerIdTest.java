@@ -16,9 +16,9 @@ public class CallerIdTest {
     public void CallerIdSDMFTest() throws IOException {
         IEncodeDecode cid = new DataBitsCallerId();
 
-        File bytesFile = new File(this.getClass().getResource("/testdata-callerid-sdmf.bytes").getFile());
+        File bytesFile = new File(this.getClass().getResource("/cidTests/testdata-callerid-sdmf.bytes").getFile());
         byte[] msg = Files.readAllBytes(bytesFile.toPath());
-        File textFile = new File(this.getClass().getResource("/testdata-callerid-sdmf.txt").getFile());
+        File textFile = new File(this.getClass().getResource("/cidTests/testdata-callerid-sdmf.txt").getFile());
         String decoded = Files.readString(textFile.toPath());
         byte[] msgDecoded = new byte[256];
 
@@ -35,9 +35,9 @@ public class CallerIdTest {
     @Test
     public void CallerIdMDMFTest() throws IOException {
         IEncodeDecode cid = new DataBitsCallerId();
-        File bytesFile = new File(this.getClass().getResource("/testdata-callerid-mdmf.bytes").getFile());
+        File bytesFile = new File(this.getClass().getResource("/cidTests/testdata-callerid-mdmf.bytes").getFile());
         byte[] msg = Files.readAllBytes(bytesFile.toPath());
-        File textFile = new File(this.getClass().getResource("/testdata-callerid-mdmf.txt").getFile());
+        File textFile = new File(this.getClass().getResource("/cidTests/testdata-callerid-mdmf.txt").getFile());
         String decoded = Files.readString(textFile.toPath());
         byte[] msgDecoded = new byte[256];
 
