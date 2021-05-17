@@ -1,1 +1,1 @@
-*.txt text eol=lf 
+*.txt -text
