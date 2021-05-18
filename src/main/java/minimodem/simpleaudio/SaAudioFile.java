@@ -79,7 +79,7 @@ public class SaAudioFile extends SimpleAudio {
         try {
             fTmpChannel.close();
             FileInputStream fInStream = new FileInputStream(fTmpOut);
-            AudioInputStream aStream = new AudioInputStream(fInStream, aFormat, fTmpOut.length()/getBackendFramesize());
+            AudioInputStream aStream = new AudioInputStream(fInStream, aFormat, fTmpOut.length()/ getFramesize());
             AudioSystem.write(aStream, type, fOut);
             fInStream.close();
         } catch (IOException ex) {
@@ -91,7 +91,7 @@ public class SaAudioFile extends SimpleAudio {
         return res;
     }
 
-    public int write(ByteBuffer byteBuf, int nframes) {
+    public int write(ByteBuffer byteBuf, int nFrames) {
         if (direction == SA_RECEIVE) {
             fLogger.error("FCannot read from file '%s' which is open for playback", fOut.getPath());
             return 0;
@@ -106,7 +106,7 @@ public class SaAudioFile extends SimpleAudio {
         return ret;
     }
 
-    public int read(ByteBuffer byteBuf, int nframes) {
+    public int read(ByteBuffer byteBuf, int nFrames) {
         if (direction == SA_TRANSMIT) {
             fLogger.error("FCannot read from file '%s' which is open for recording", fOut.getPath());
         }

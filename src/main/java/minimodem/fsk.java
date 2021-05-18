@@ -1,3 +1,5 @@
+ https://www.nayuki.io/res/free-small-fft-in-multiple-languages/Fft.java
+
 public class Translation {
 	public static float fskFindFrame(FskPlan[] fskp, float[] samples, int frameNsamples_U, int tryFirstSample_U, int tryMaxNsamples_U, int tryStepNsamples_U, float tryConfidenceSearchLimit, String8 expectBitsString, long[] bitsOutp_U, float[] amplOutp, int[] frameStartOutp_U) {
 		int expectNBits = expectBitsString.length();

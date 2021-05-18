@@ -67,7 +67,7 @@ class Minimodem implements Callable<Integer> {
 			parameterConsumer = USoSParameterConsumer.class)
 			protected boolean baudotUSOS = true;
 	@Option(names = {"--msb-first"}) 										protected boolean bfskMsbFirst=false;
-	@Option(names = {"-f", "--file"}, paramLabel = "{filename.flac}",
+	@Option(names = {"-f", "--file"}, paramLabel = "{filename.flac}", arity = "1",
 			description="Encode or decode an audio file (extension sets audio format)")
 			protected File file=null;
 	@Option(names = {"-b", "--bandwidth"}, paramLabel = "{rx_bandwidth}",
@@ -98,8 +98,6 @@ class Minimodem implements Callable<Integer> {
 	@Option(names = {"--invert-start-stop"})											protected boolean invertStartStop;
 	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}")								protected int bfskSyncByte = -1;
 	@Option(names = {"-q", "--quiet"})													protected boolean oQuite;
-	@Option(names = {"-A", "--alsa"}, arity = "0..1", paramLabel = "{plughw:X,Y}")		protected String oALSA;
-	@Option(names = {"-s", "sndio"}, arity = "0..1", paramLabel = "{device}")			protected String oDevice;
 	@Option(names = {"-R", "--samplerate"}, paramLabel = "{rate}",
 			description = "Set the audio sample rate (default rate is 48000 Hz).",
 			parameterConsumer = SampleRateParameterConsumer.class)
@@ -133,7 +131,7 @@ class Minimodem implements Callable<Integer> {
 	@Option(names = {"--print-eot"},
 			description="Print '### EOT' to log after each transmit completes." )
 			protected boolean txPrintEot = false;
-	@Option(names = {"--Xrxnoise"}, paramLabel = "{rx-noise-factor}")					protected boolean oXrxNoise;
+	@Option(names = {"--Xrxnoise"}, paramLabel = "{rx-noise-factor}")			protected float rxNoiseFactor = 0.0f;
 	@Option(names = {"--tx-carrier"},
 			description="When transmitting from a blocking source, keep a carrier going while waiting " +
 					"for more data.")
@@ -232,8 +230,8 @@ class Minimodem implements Callable<Integer> {
 
 	protected int receive() {
 		fLogger.info("Receiving ...");
-		SaAudioFile saOut = new SaAudioFile();
-		if (!saOut.open(file,
+		SaAudioFile saIn = new SaAudioFile();
+		if (!saIn.open(file,
 				floatSamples?PCM_FLOAT:PCM_SIGNED,
 				SA_RECEIVE,
 				sampleRate,
@@ -241,6 +239,15 @@ class Minimodem implements Callable<Integer> {
 				bfskMsbFirst)) {
 			return -1;
 		}
+		saIn.setRxNoise(rxNoiseFactor);
+		fLogger.info("Audio file is ready");
+
+		Receiver rx = new Receiver(saIn);
+		rx.configure(bfskDataRate,
+					bfskNStartBits,
+					bfskNDataBits);
+		rx.receive();
+
 		return 0;
 	}
 

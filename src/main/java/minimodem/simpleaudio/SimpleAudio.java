@@ -1,3 +1,8 @@
+/**
+ * minimodem4j
+ * SimpleAudio.java
+ * Analog for simpleaudio.c, simpleaudio.h @ https://github.com/kamalmostafa/minimodem
+ */
 package minimodem.simpleaudio;
 
 import org.apache.logging.log4j.LogManager;
@@ -9,18 +14,28 @@ import java.nio.ByteBuffer;
 import static javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT;
 import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
 
+/**
+ *  Abstraction of audion device
+ */
 public abstract class SimpleAudio {
     private static final Logger fLogger = LogManager.getFormatterLogger(SimpleAudio.class);
 
     protected SaDirection direction;
     protected AudioFormat aFormat = null;
+    private float rxNoise;
 
     /**
-     * only for the sndfile backend
+     * rxNoise setter
+     * @param rxNoise new value
      */
-    private float rxnoise;
+    public void setRxNoise(float rxNoise) {
+        this.rxNoise = rxNoise;
+    }
 
-
+    /**
+     * Gets backend sample rate
+     * @return Backend sample rate as specified by audio format or 0 if audio format os not set up
+     */
     public int getRate() {
         if (aFormat == null) {
             return 0;
@@ -29,7 +44,11 @@ public abstract class SimpleAudio {
         }
     }
 
-    public int getBackendFramesize() {
+    /**
+     * Gets backend frame size
+     * @return Backend frame size as specified by audio format or 0 if audio format os not set up
+     */
+    public int getFramesize() {
         if (aFormat == null) {
             return 0;
         } else {
@@ -37,6 +56,10 @@ public abstract class SimpleAudio {
         }
     }
 
+    /**
+     * Gets backend encoding
+     * @return Backend encoding as specified by audio format or 0 if audio format os not set up
+     */
     public AudioFormat.Encoding getEncoding() {
         if (aFormat == null) {
             return null;
@@ -75,7 +98,21 @@ public abstract class SimpleAudio {
 
         return true;
     }
-    abstract public int read(ByteBuffer byteBuf, int nframes );
 
-    abstract public int write (ByteBuffer byteBuf, int nframes );
+    /**
+     * Reads given number of frames into buffer
+     * @param byteBuf
+     * @param nFrames
+     * @return the number of frames actually red
+     */
+    abstract public int read(ByteBuffer byteBuf, int nFrames);
+
+    /**
+     * Writes given number of frames from buffer
+     * @param byteBuf
+     * @param nFrames
+     * @return the number of frames actually written
+     */
+    abstract public int write (ByteBuffer byteBuf, int nFrames);
+
 }

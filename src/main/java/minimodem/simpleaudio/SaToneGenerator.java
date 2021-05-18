@@ -116,7 +116,7 @@ public class SaToneGenerator {
      * @param nsamplesDur   duration (the number of samples)
      */
     public void Tone(SimpleAudio saOut, float toneFreq, int nsamplesDur) {
-        int framesize = saOut.getBackendFramesize();
+        int framesize = saOut.getFramesize();
         ByteBuffer byteBuf = ByteBuffer.allocateDirect(nsamplesDur * framesize);
         int i;
 
