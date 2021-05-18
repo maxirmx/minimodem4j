@@ -3,12 +3,16 @@
  * Created from uic_codes.c, uic_codes.h @ https://github.com/kamalmostafa/minimodem
  */
 
-package minimodem;
+package minimodem.databits;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Formatter;
 import java.util.Map;
+
+import static minimodem.databits.BitOps.bitReverse;
+import static minimodem.databits.BitOps.bitWindow;
 
 public class UicCodes {
     public final static int TYPE_GROUNDTRAIN = 0;
@@ -38,21 +42,38 @@ public class UicCodes {
 
     private static final Logger logger = LogManager.getLogger(UicCodes.class);
 
-    public static String messageMeaning(int code, int type) {
+    private static String messageMeaning(int code, int type) {
         Map<Integer, String> messages = null;
         if(type == TYPE_GROUNDTRAIN) {
             messages = GROUND_TO_TRAIN_MESSAGES;
         } else if(type == TYPE_TRAINGROUND) {
             messages = TRAIN_TO_GROUND_MESSAGES;
         } else {
-            logger.fatal("Invalid UIC message type code=%x, type=%x", code, type);
-            System.exit(-1);
+            logger.error("Invalid UIC message type code=%x, type=%x", code, type);
+            return "Unknown";
         }
 
         String r = messages.get(code);
 
         if ( r == null)    { return "Unknown"; }
         return r;
+    }
+
+    public static String databitsDecodeUic(long input, int type) {
+        StringBuilder sb = new StringBuilder();
+        Formatter fmt = new Formatter(sb);
+        long code = bitReverse(bitWindow(input, 24, 8), 8);
+        fmt.format("Train ID: %X%X%X%X%X%X - Message: %02X (%s)\n",
+                bitWindow(input, 0, 4),
+                bitWindow(input, 4, 4),
+                bitWindow(input, 8, 4),
+                bitWindow(input, 12, 4),
+                bitWindow(input, 16, 4),
+                bitWindow(input, 20, 4),
+                code,
+                messageMeaning((int) code, type));
+
+        return sb.toString();
     }
 
 }
