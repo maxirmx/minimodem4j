@@ -175,8 +175,48 @@ public class Receiver {
                 }
                 samplesNvalid_U +=r;
             }
+			if(samplesNvalid_U == 0) {
+				break;
+			}
 
+			if(carrierAutodetectThreshold > 0.0f && carrierBand < 0) {
+				float nsamplesPerScan = nsamplesPerBit;
+				/*	    if ( nsamples_per_scan > fskp->fftsize )
+		nsamples_per_scan = fskp->fftsize;*/
+				for(int i_U = 0; Integer.toUnsignedLong(i_U) + nsamplesPerScan <= Float.parseFloat(Long.toUnsignedString(samplesNvalid_U)); i_U = (int)(Integer.toUnsignedLong(i_U) + nsamplesPerScan)) {
+					/*		carrier_band = fsk_detect_carrier(fskp,
+				    samplebuf+i, nsamples_per_scan,
+				    carrier_autodetect_threshold);*/
+					if(carrierBand >= 0) {
+						break;
+					}
+                    			if(Long.compareUnsigned(Integer.toUnsignedLong(advance_U), samplesNvalid_U) > 0) {
+				advance_U = (int)samplesNvalid_U;
+			}
+			if(carrierBand < 0) {
+				debugLog(cs8("autodetected carrier band not found\n"));
+				continue;
+			
+				}
+             }   
+			// default negative shift -- reasonable?
+			/*	    int b_shift = - (float)(autodetect_shift + fskp->band_width/2.0f)
+						/ fskp->band_width;*/
+			if(bfskInvertedFreqs) {
+				bShift *= -1;
+			}
+			/* only accept a carrier as b_mark if it will not result
+			 * in a b_space band which is "too low". */
+			int bSpace = carrierBand + bShift;
+			if(bSpace < 1 /*|| b_space >= fskp->nbands*/) {
+				debugLog(cs8("autodetected space band out of range\n"));
+				carrierBand = -1;
+				continue;
+			}
+	    debug_log("### TONE freq=%.1f ###\n",
+		    carrier_band * fskp->band_width);
 
+	    fsk_set_tones_by_bandshift(fskp, /*b_mark*/carrier_band, b_shift);
         }
 
 
