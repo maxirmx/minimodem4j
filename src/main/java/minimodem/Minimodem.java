@@ -153,13 +153,13 @@ class Minimodem implements Callable<Integer> {
 
 	protected int bfskDoTxSyncBytes = 0;
 	protected int bfskNDataBits = 0;
+	protected int bfskFrameNBits = 0;
 
 	protected static  int nChannels = 1; // FIXME: only works with one channel
 
 	private boolean	bfskDoRxSync = false;
 	private int txLeaderBitsLen = 2;
 	private byte[] expectDataString = null;
-	private byte[] expectSyncString = null;
 	private int expectNBits;
 	private int autodetectShift;
 
@@ -242,10 +242,16 @@ class Minimodem implements Callable<Integer> {
 		saIn.setRxNoise(rxNoiseFactor);
 		fLogger.info("Audio file is ready");
 
-		Receiver rx = new Receiver(saIn);
-		rx.configure(bfskDataRate,
-					bfskNStartBits,
-					bfskNDataBits);
+		Receiver rx = new Receiver(saIn,
+				bfskDataRate,
+				bfskNStartBits,
+				bfskNStopBits,
+				bfskNDataBits,
+				bfskFrameNBits,
+				invertStartStop,
+				bfskDoRxSync,
+				bfskSyncByte);
+		rx.configure(expectDataString);
 		rx.receive();
 
 		return 0;
@@ -407,7 +413,7 @@ class Minimodem implements Callable<Integer> {
 		}
 
 		// n databits plus bfsk_startbit start bits plus bfsk_nstopbit stop bits:
-		int bfskFrameNBits = (int)(bfskNDataBits + bfskNStartBits + bfskNStopBits);
+		bfskFrameNBits = (int)(bfskNDataBits + bfskNStartBits + bfskNStopBits);
 		if(bfskFrameNBits > 64) {
 			fLogger.fatal("Total number of bits per frame must be <= 64, got [%d]", bfskNDataBits);
 			return 1;

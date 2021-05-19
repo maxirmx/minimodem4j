@@ -26,28 +26,45 @@ public class Receiver {
 
      private final SimpleAudio rxSaIn;
      private final int sampleRate;
+     private final float bfskDataRate;
+     private final int bfskNStartBits;
+     private final float bfskNStopBits;
+     private final int bfskNDataBits;
+     private final int bfskFrameNBits;
+     private final boolean invertStartStop;
+     private final boolean bfskDoRxSync;
+     private final int bfskSyncByte;
 
      private float[] sampleBuf;
+     private byte[] expectDataString;
+     private byte[] expectSyncString;
 
     /**
      *
      * @param saIn
      */
-     public Receiver(SimpleAudio saIn) {
+     public Receiver(SimpleAudio saIn,
+                     float dataRate,
+                     int nStartBits,
+                     float nStopBits,
+                     int nDataBits,
+                     int frameNBits,
+                     boolean iStartStop,
+                     boolean doRxSync,
+                     int syncByte) {
         rxSaIn = saIn;
         sampleRate = saIn.getRate();
-
+        bfskDataRate = dataRate;
+        bfskNStartBits = nStartBits;
+        bfskNStopBits = nStopBits;
+        bfskNDataBits = nDataBits;
+        bfskFrameNBits = frameNBits;
+        invertStartStop = iStartStop;
+        bfskDoRxSync = doRxSync;
+        bfskSyncByte = syncByte;
      }
 
-    /**
-     *
-     * @param bfskDataRate
-     * @param bfskNStartBits
-     * @param bfskNDataBits
-     */
-    public void configure(float bfskDataRate,
-                          int bfskNStartBits,
-                          int bfskNDataBits) {
+    public void configure(byte[] expctDataString) {
 
         /*
          * Prepare the input sample chunk rate
@@ -86,7 +103,7 @@ public class Receiver {
         if(samplebufSize < sampleRate / SAMPLE_BUF_DIVISOR) {
             samplebufSize = sampleRate / SAMPLE_BUF_DIVISOR;
         }
-        fLogger.debug("samplebufSize=%i", samplebufSize);
+        fLogger.debug("Created sample buffer with samplebufSize=%i", samplebufSize);
         sampleBuf = new float[samplebufSize];
 
         // Ensure that we overscan at least a single sample
@@ -96,7 +113,27 @@ public class Receiver {
         }
         fLogger.debug(("FRAME_OVERSCAN=%f nSamplesOverscan=%i"), FRAME_OVERSCAN, nSamplesOverscan);
 
+        float frameNBits = bfskFrameNBits;
+        int frameNSamples = (int)(nSamplesPerBit * frameNBits + 0.5f);
 
+        if(expctDataString == null) {
+            expectDataString = new byte[64];
+            buildExpectBitsString(expectDataString, 0, 0);
+        } else {
+            expectDataString = expctDataString;
+        }
+        fLogger.debug("expectDataString = '%s' (%d)", expectDataString.toString());
+
+        expectSyncString = expectDataString;
+        if(bfskDoRxSync && bfskSyncByte >= 0) {
+            expectSyncString = new byte[64];
+            buildExpectBitsString(expectSyncString, 1, bfskSyncByte);
+        }
+        fLogger.debug("expectSyncString = '%s'", expectSyncString);
+
+    }
+
+    public void receive() {
 
         long samplesNvalid_U = 0;
         int ret = 0;
@@ -110,29 +147,7 @@ public class Receiver {
         int noconfidence_U = 0;
         int advance_U = 0;
 
-
-        float frameNBits = bfskFrameNBits;
-        int frameNsamples_U = (int)(nsamplesPerBit * frameNBits + 0.5f);
-
-        String8 expectDataStringBuffer = new String8(64);
-        if(expectDataString == null) {
-            expectDataString = expectDataStringBuffer;
-            expectNBits_U = buildExpectBitsString(expectDataString, bfskNstartbits, bfskNDataBits_U, bfskNstopbits, (MethodRef0<Integer>)ImplicitDeclarations::invertStartStop, 0, 0);
-        }
-        debugLog(cs8("eds = '%s' (%lu)\n"), expectDataString, expectDataString.length());
-
-        String8 expectSyncStringBuffer = new String8(64);
-        if(expectSyncString == null && bfskDoRxSync_U && Integer.toUnsignedLong(bfskSyncByte_U) >= 0) {
-            expectSyncString = expectSyncStringBuffer;
-            buildExpectBitsString(expectSyncString, bfskNstartbits, (MethodRef0<Integer>)ImplicitDeclarations::bfskNDataBits, bfskNstopbits, (MethodRef0<Integer>)ImplicitDeclarations::invertStartStop, 1, bfskSyncByte_U);
-        } else {
-            expectSyncString = expectDataString;
-        }
-        debugLog(cs8("ess = '%s' (%lu)\n"), expectSyncString, expectSyncString.length());
-
-    }
-
-    public void receive() {
+Signal.handle()
 
         int expectNsamples_U = nsamplesPerBit * expectNBits_U;
         float trackAmplitude = 0.0f;
@@ -175,11 +190,52 @@ public class Receiver {
                 }
                 samplesNvalid_U +=r;
             }
-
-
         }
+    }
 
 
+    // example expect_bits_string
+    //	  0123456789A
+    //	  isddddddddp	i == idle bit (a.k.a. prev_stop bit)
+    //			s == start bit  d == data bits  p == stop bit
+    // ebs = "10dddddddd1"  <-- expected mark/space framing pattern
+    //
+    // NOTE! expect_n_bits ends up being (frame_n_bits+1), because
+    // we expect the prev_stop bit in addition to this frame's own
+    // (start + n_data_bits + stop) bits.  But for each decoded frame,
+    // we will advance just frame_n_bits worth of samples, leaving us
+    // pointing at our stop bit -- it becomes the next frame's prev_stop.
+    //
+    //                  prev_stop--v
+    //                       start--v        v--stop
+    // char *expect_bits_string = "10dddddddd1";
+    //
+
+    protected int buildExpectBitsString(byte[] expectBitsString,
+                                        int useExpectBits,
+                                        long expectBits_U) {
+        byte startBitValue = (byte)(invertStartStop ? '1' : '0');
+        byte stopBitValue = (byte)(invertStartStop ? '0' : '1');
+        int j = 0;
+        if(bfskNStopBits != 0.0f) {
+            expectBitsString[j++] = stopBitValue;
+        }
+        // Nb. only integer number of start bits works (for rx)
+        for(int i = 0; i < bfskNStartBits; i++) {
+            expectBitsString[j++] = startBitValue;
+        }
+        for(int i = 0; i < bfskNDataBits; i++, j++) {
+            if(useExpectBits != 0) {
+                expectBitsString[j] = (byte)((expectBits_U >>> i & 1) + '0');
+            } else {
+                expectBitsString[j] = 'd';
+            }
+        }
+        if(bfskNStopBits != 0.0f) {
+            expectBitsString[j++] = stopBitValue;
+        }
+        expectBitsString[j] = (byte)0;
+        return j;
     }
 
 }
