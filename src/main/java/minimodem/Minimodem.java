@@ -97,7 +97,9 @@ class Minimodem implements Callable<Integer> {
 			protected float bfskNStopBits = -1.0f;
 	@Option(names = {"--invert-start-stop"})											protected boolean invertStartStop;
 	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}")								protected int bfskSyncByte = -1;
-	@Option(names = {"-q", "--quiet"})													protected boolean oQuite;
+	@Option(names = {"-q", "--quiet"},
+			description="Do not report CARRIER / NOCARRIER or signal analysis metrics.")
+			protected boolean quiteMode;
 	@Option(names = {"-R", "--samplerate"}, paramLabel = "{rate}",
 			description = "Set the audio sample rate (default rate is 48000 Hz).",
 			parameterConsumer = SampleRateParameterConsumer.class)
@@ -112,7 +114,9 @@ class Minimodem implements Callable<Integer> {
 						"default 16-bit signed integer format (applies to --tx mode only; " +
 						"--rx mode always uses 32-bit floating-point).")
 			protected boolean floatSamples;
-	@Option(names = {"--rx-one"})														protected boolean oRxOne;
+	@Option(names = {"--rx-one"},
+			description = "Quit after the first carrier/no-carrier event (applies to --rx mode only).")
+			protected boolean rxOne;
 	@Option(names = {"--benchmarks"})													protected boolean oBenchmarks;
 	@Option(names = {"--binary-output"},
 			description="Print received data bits as raw binary output using characters '0' and '1'. " +
@@ -132,10 +136,6 @@ class Minimodem implements Callable<Integer> {
 			description="Print '### EOT' to log after each transmit completes." )
 			protected boolean txPrintEot = false;
 	@Option(names = {"--Xrxnoise"}, paramLabel = "{rx-noise-factor}")			protected float rxNoiseFactor = 0.0f;
-	@Option(names = {"--tx-carrier"},
-			description="When transmitting from a blocking source, keep a carrier going while waiting " +
-					"for more data.")
-			protected boolean txCarrier;
 
 	@Parameters(index = "0", paramLabel = "{baudmod}",
 			description =
@@ -210,20 +210,21 @@ class Minimodem implements Callable<Integer> {
 		fLogger.info("Audio file is ready");
 
 		fLogger.info("Transmitting ...");
-		Transmitter tx = new Transmitter(saOut, toneGenerator, txPrintEot);
-		tx.fskTransmitStdin( false,   // txInteractive
-							bfskDataRate,
-							bfskMarkF,
-							bfskSpaceF,
-							bfskNDataBits,
-							bfskNStartBits,
-							bfskNStopBits,
-							invertStartStop,
-							bfskMsbFirst,
-							bfskDoTxSyncBytes,
-							bfskSyncByte,
-							bfskDatabitsEncodeDecode,
-							txCarrier);
+		Transmitter tx = new Transmitter(saOut,
+				toneGenerator,
+				bfskDataRate,
+				bfskMarkF,
+				bfskSpaceF,
+				bfskNDataBits,
+				bfskNStartBits,
+				bfskNStopBits,
+				invertStartStop,
+				bfskMsbFirst,
+				bfskDoTxSyncBytes,
+				bfskSyncByte,
+				txPrintEot);
+
+		tx.fskTransmitStdin(bfskDatabitsEncodeDecode);
 		saOut.close();
 		return 0;
 	}
@@ -254,9 +255,14 @@ class Minimodem implements Callable<Integer> {
 				bfskMarkF,
 				bfskSpaceF,
 				bandWidth,
-				carrierAutodetectThreshold);
+				carrierAutodetectThreshold,
+				autodetectShift,
+				bfskInvertedFreqs,
+				fskConfidenceSearchLimit,
+				fskConfidenceThreshold);
+
 		rx.configure(expectDataString);
-		rx.receive();
+		rx.receive(quiteMode, rxOne);
 
 		return 0;
 	}

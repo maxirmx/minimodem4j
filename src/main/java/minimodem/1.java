@@ -1,4 +1,4 @@
- https://www.nayuki.io/res/free-small-fft-in-multiple-languages/Fft.java
+ /*https://www.nayuki.io/res/free-small-fft-in-multiple-languages/Fft.java
 
 public class Translation {
 	public static float fskFindFrame(FskPlan[] fskp, float[] samples, int frameNsamples_U, int tryFirstSample_U, int tryMaxNsamples_U, int tryStepNsamples_U, float tryConfidenceSearchLimit, String8 expectBitsString, long[] bitsOutp_U, float[] amplOutp, int[] frameStartOutp_U) {
@@ -72,49 +72,11 @@ public class Translation {
 
 
 
-	public static int fskDetectCarrier(FskPlan[] fskp, float[] samples, int nsamples_U, float minMagThreshold) {
-		assert Integer.compareUnsigned(nsamples_U, fskp[0].getFftsize()) <= 0;
-		int paNchannels_U = 1; // FIXME
-		fskp[0].getFftin().fill(0, fskp[0].getFftsize() * paNchannels_U, 0);
-		nnc(fskp[0].getFftin()).copyFrom(samples, nsamples_U);
-		fftwfExecute(fskp[0].getFftplan());
-		float magscalar = 1.0f / (Integer.toUnsignedLong(nsamples_U) / 2.0f);
-		float maxMag = 0.0f;
-		int maxMagBand = -1;
-		int i = 1; /* start detection at the first non-DC band */
-		int nbands = fskp[0].getNbands_U();
-		for(; i < nbands; i++) {
-			float mag = bandMag(fskp[0].getFftout(), i, magscalar);
-			if(mag < minMagThreshold) {
-				continue;
-			}
-			if(maxMag < mag) {
-				maxMag = mag;
-				maxMagBand = i;
-			}
-		}
-		if(maxMagBand < 0) {
-			return -1;
-		}
 
-		return maxMagBand;
-	}
-	public static int fskDetectCarrier(FskPlan[] fskp, float[] samples, int nsamples_U, float minMagThreshold) {
-		assert Integer.compareUnsigned(nsamples_U, fskp[0].getFftsize()) <= 0;
 
-		int paNchannels_U = 1; // FIXME
-		fskp[0].getFftin().fill(0, fskp[0].getFftsize() * paNchannels_U, 0);
-		nnc(fskp[0].getFftin()).copyFrom(samples, nsamples_U);
-		fftwfExecute(fskp[0].getFftplan());
-		float magscalar = 1.0f / (Integer.toUnsignedLong(nsamples_U) / 2.0f);
-		float maxMag = 0.0f;
-		int maxMagBand = -1;
-		int i = 1; /* start detection at the first non-DC band */
-		int nbands = fskp[0].getNbands_U();
-		return 0;
-	}
 }
 
 	
 
 }
+*/

@@ -13,8 +13,16 @@ public class Transmitter {
     private final SimpleAudio txSaOut;
     private final SaToneGenerator txToneGenerator;
     private final boolean txPrintEot;
-
-    private static int txFlushNsamples = 0;
+    private final float bfskDataRate;
+    private final float bfskMarkF;
+    private final float bfskSpaceF;
+    private final int nDataBits;
+    private final float bfskNStartBits;
+    private final float bfskNStopBits;
+    private final boolean invertStartStop;
+    private final boolean bfskMsbFirst;
+    private final int bfskDoTxSyncBytes;
+    private final int bfskSyncByte;
 
     private int txTransmitting = 0;
     public static int txLeaderBitsLen = 2;
@@ -23,10 +31,33 @@ public class Transmitter {
     private int txBitNsamples;
 
 
-    public Transmitter(SimpleAudio saOut, SaToneGenerator saTone, boolean printEot) {
+    public Transmitter(SimpleAudio saOut,
+                       SaToneGenerator saTone,
+                       float dataRate,
+                       float markF,
+                       float spaceF,
+                       int nDBits,
+                       float nStartBits,
+                       float nStopBits,
+                       boolean iStartStop,
+                       boolean msbFirst,
+                       int doTxSyncBytes,
+                       int syncByte,
+                       boolean printEot
+                       ) {
         txSaOut = saOut;
         txToneGenerator = saTone;
         txPrintEot = printEot;
+        bfskDataRate = dataRate;
+        bfskMarkF = markF;
+        bfskSpaceF = spaceF;
+        nDataBits = nDBits;
+        bfskNStartBits = nStartBits;
+        bfskNStopBits = nStopBits;
+        invertStartStop = iStartStop;
+        bfskMsbFirst = msbFirst;
+        bfskDoTxSyncBytes = doTxSyncBytes;
+        bfskSyncByte = syncByte;
     }
 
     /**
@@ -55,27 +86,10 @@ public class Transmitter {
         }
     }
 
-    public void fskTransmitStdin(boolean txInteractive,
-                                 float dataRate,
-                                 float bfskMarkF,
-                                 float bfskSpaceF,
-                                 int nDataBits,
-                                 float bfskNstartbits,
-                                 float bfskNstopbits,
-                                 boolean invertStartStop,
-                                 boolean bfskMsbFirst,
-                                 int bfskDoTxSyncBytes,
-                                 int bfskSyncByte,
-                                 IEncodeDecode encoder,
-                                 boolean txcarrier)
+    public void fskTransmitStdin(IEncodeDecode encoder)
     {
         txBfskMarkF = bfskMarkF;
-        txBitNsamples = (int) (txSaOut.getRate() / dataRate + 0.5f);
-        if ( txInteractive )
-            txFlushNsamples = txSaOut.getRate()/2; // 0.5 sec of zero samples to flush
-        else
-            txFlushNsamples = 0;
-
+        txBitNsamples = (int) (txSaOut.getRate() / bfskDataRate + 0.5f);
 
         boolean endOfFile = false;
         while (!endOfFile) {
@@ -98,13 +112,13 @@ public class Transmitter {
                          /* emit "preamble" of sync bytes */
                          for (j = 0; j < bfskDoTxSyncBytes; j++) {
                              fskTransmitFrame(bfskSyncByte, nDataBits, txBitNsamples, bfskMarkF, bfskSpaceF,
-                                     bfskNstartbits, bfskNstopbits, invertStartStop, bfskMsbFirst);
+                                     bfskNStartBits, bfskNStopBits, invertStartStop, bfskMsbFirst);
                          }
                      }
                      /* emit data bits */
                      for(j = 0; j<nwords; j++) {
-                         fskTransmitFrame(bits[j], nDataBits, txBitNsamples, bfskMarkF, bfskSpaceF, bfskNstartbits,
-                                         bfskNstopbits, invertStartStop, bfskMsbFirst);
+                         fskTransmitFrame(bits[j], nDataBits, txBitNsamples, bfskMarkF, bfskSpaceF, bfskNStartBits,
+                                 bfskNStopBits, invertStartStop, bfskMsbFirst);
                      }
                  }
                  else {
@@ -122,10 +136,6 @@ public class Transmitter {
     private void txStopTransmitHandler() {
         for(int j = 0; j < txTrailerBitsLen; j++) {
             txToneGenerator.Tone(txSaOut, txBfskMarkF, txBitNsamples);
-        }
-
-        if(txFlushNsamples != 0) {
-            txToneGenerator.Tone(txSaOut, 0, txFlushNsamples);
         }
 
         txTransmitting = 0;
