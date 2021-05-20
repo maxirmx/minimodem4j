@@ -250,7 +250,11 @@ class Minimodem implements Callable<Integer> {
 				bfskFrameNBits,
 				invertStartStop,
 				bfskDoRxSync,
-				bfskSyncByte);
+				bfskSyncByte,
+				bfskMarkF,
+				bfskSpaceF,
+				bandWidth,
+				carrierAutodetectThreshold);
 		rx.configure(expectDataString);
 		rx.receive();
 

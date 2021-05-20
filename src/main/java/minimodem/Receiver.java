@@ -34,10 +34,18 @@ public class Receiver {
      private final boolean invertStartStop;
      private final boolean bfskDoRxSync;
      private final int bfskSyncByte;
+     private final float bfskMarkF;
+     private final float bfskSpaceF;
+     private final float bandWidth;
+     private final float carrierAutodetectThreshold;
 
+     private float nSamplesPerBit;
+     private int expectNBits;
+     private int samplebufSize;
      private float[] sampleBuf;
      private byte[] expectDataString;
      private byte[] expectSyncString;
+     private Fsk fskp;
 
     /**
      *
@@ -51,7 +59,11 @@ public class Receiver {
                      int frameNBits,
                      boolean iStartStop,
                      boolean doRxSync,
-                     int syncByte) {
+                     int syncByte,
+                     float spaceF,
+                     float markF,
+                     float bWidth,
+                     float cAutodetectThreshold) {
         rxSaIn = saIn;
         sampleRate = saIn.getRate();
         bfskDataRate = dataRate;
@@ -62,27 +74,18 @@ public class Receiver {
         invertStartStop = iStartStop;
         bfskDoRxSync = doRxSync;
         bfskSyncByte = syncByte;
+        bfskMarkF =  spaceF;
+        bfskSpaceF = markF;
+        bandWidth = bWidth;
+        carrierAutodetectThreshold = cAutodetectThreshold;
      }
 
     public void configure(byte[] expctDataString) {
 
-        /*
-         * Prepare the input sample chunk rate
-         */
-        float nSamplesPerBit = sampleRate / bfskDataRate;
+        nSamplesPerBit = sampleRate / bfskDataRate;  // The input sample chunk rate
+        fskp = new Fsk(sampleRate, bfskMarkF, bfskSpaceF, bandWidth);
 
-        /*
-         * Prepare the fsk plan
-
-
-        AbstractData fskp;
-        fskp = String8.from(fskPlanNew(sampleRate, bfskMarkF, bfskSpaceF, bandWidth));
-        if(fskp == null) {
-            System.err.println("fsk_plan_new() failed");
-            return  1 ;
-        }
-*/
-        /*
+         /*
          * Prepare the input sample buffer.  For 8-bit frames with prev/start/stop
          * we need 11 data-bits worth of samples, and we will scan through one bits
          * worth at a time, hence we need a minimum total input buffer size of 12
@@ -96,7 +99,7 @@ public class Receiver {
         nBits += 1;                 // stop bit (first whole stop bit)
 
         // FIXME EXPLAIN +1 goes with extra bit when scanning
-        int samplebufSize = (int)(ceil(nSamplesPerBit) * Integer.toUnsignedLong(nBits + 1));
+        samplebufSize = (int)(ceil(nSamplesPerBit) * Integer.toUnsignedLong(nBits + 1));
         samplebufSize *= 2; // account for the half-buf filling method
 
         // For performance, use a larger samplebuf_size than necessary
@@ -118,9 +121,10 @@ public class Receiver {
 
         if(expctDataString == null) {
             expectDataString = new byte[64];
-            buildExpectBitsString(expectDataString, 0, 0);
+            expectNBits = buildExpectBitsString(expectDataString, 0, 0);
         } else {
             expectDataString = expctDataString;
+            expectNBits = expctDataString.length;
         }
         fLogger.debug("expectDataString = '%s' (%d)", expectDataString.toString());
 
@@ -135,7 +139,7 @@ public class Receiver {
 
     public void receive() {
 
-        long samplesNvalid_U = 0;
+        int samplesNValid = 0;
         int ret = 0;
 
         int carrier = 0;
@@ -145,97 +149,95 @@ public class Receiver {
         long carrierNsamples_U = 0;
 
         int noconfidence_U = 0;
-        int advance_U = 0;
+        int advance = 0;
 
-Signal.handle()
-
-        int expectNsamples_U = nsamplesPerBit * expectNBits_U;
+        int expectNSamples = (int) (nSamplesPerBit * expectNBits);
         float trackAmplitude = 0.0f;
         float peakConfidence = 0.0f;
 
-        signal((MethodRef0<Integer>)ImplicitDeclarations::sigint, (MethodRef0<Integer>)ImplicitDeclarations::rxStopSighandler);
-
-        while(true) {
-            if(rxStop) {
-                break;
+        boolean rxStop = false;
+        while (!rxStop) {
+            fLogger.debug("advance = %d", advance);
+            /* Shift the samples in sampleBuf by 'advance' samples */
+            assert Integer.compareUnsigned(advance, samplebufSize) <= 0;
+            if (advance == samplebufSize) {
+                samplesNValid = 0;
+                advance = 0;
             }
-            debugLog(cs8("advance=%u\n"), advance_U);
-            /* Shift the samples in samplebuf by 'advance' samples */
-            assert Integer.compareUnsigned(advance_U, samplebufSize) <= 0;
-            if(advance_U == samplebufSize) {
-                samplesNvalid_U = false;
-                advance_U = 0;
-            }
-            if(advance_U != 0) {
-                if(Long.compareUnsigned(Integer.toUnsignedLong(advance_U), samplesNvalid_U) > 0) {
+            if (advance != 0) {
+                if (advance > samplesNValid) {
                     break;
                 }
-                nnc(String8.from(ImplicitDeclarations::samplebuf)).copyFrom(String8.from(dataAddress((MethodRef0<Integer>)ImplicitDeclarations::samplebuf) + advance_U), (int)(Integer.toUnsignedLong(samplebufSize - advance_U) * ((long)FLOAT_SIZE)));
-                samplesNvalid_U -= Integer.toUnsignedLong(advance_U);
+                System.arraycopy(sampleBuf,advance,sampleBuf,0, sampleBuf.length-advance);
+                samplesNValid -= advance;
             }
-            if(Long.compareUnsigned(samplesNvalid_U, samplebufSize / 2) < 0) {
+            if (samplesNValid < samplebufSize / 2) {
                 float[] samplesReadptr = sampleBuf;
-                int samplesReadptrIndex = (int)samplesNvalid_U;
+                int samplesReadptrIndex = (int) samplesNValid;
                 long readNsamples_U = samplebufSize / 2;
                 /* Read more samples into samplebuf (fill it) */
                 assert Long.compareUnsigned(readNsamples_U, 0) > 0;
-                assert Long.compareUnsigned(samplesNvalid_U + readNsamples_U, samplebufSize) <= 0;
-                long r;
-                r = simpleaudioRead((MethodRef0<Integer>)ImplicitDeclarations::sa, (MethodRef0<Integer>)ImplicitDeclarations::samplesReadptr, readNsamples_U);
-                debugLog(cs8("simpleaudio_read(samplebuf+%td, n=%zu) returns %zd\n"), nnc(sampleBuf).shift((int)dataAddress(-(MethodRef0<Integer>)ImplicitDeclarations::samplesReadptr)), readNsamples_U, r);
-                if(r < 0) {
-                    System.err.println("simpleaudio_read: error");
+                assert Long.compareUnsigned(samplesNValid + readNsamples_U, samplebufSize) <= 0;
+                long r=0;
+               // >>>>> r = sa.read()
+              //  r = simpleaudioRead((MethodRef0<Integer>) ImplicitDeclarations::sa, (MethodRef0<Integer>) ImplicitDeclarations::samplesReadptr, readNsamples_U);
+              //  debugLog(cs8("simpleaudio_read(samplebuf+%td, n=%zu) returns %zd\n"), nnc(sampleBuf).shift((int) dataAddress(-(MethodRef0<Integer>) ImplicitDeclarations::samplesReadptr)), readNsamples_U, r);
+                if (r < 0) {
+                    fLogger.error("Simpleaudio read error");
                     ret = -1;
                     break;
                 }
-                samplesNvalid_U +=r;
+                samplesNValid += r;
             }
 
-			if(samplesNvalid_U == 0) {
-				break;
-			}
+            if (samplesNValid == 0) {
+                break;
+            }
 
-			if(carrierAutodetectThreshold > 0.0f && carrierBand < 0) {
-				float nsamplesPerScan = nsamplesPerBit;
+            int carrierBand = -1;
+            if (carrierAutodetectThreshold > 0.0f && carrierBand < 0) {
+                int i;
+                float nsamplesPerScan = nSamplesPerBit;
 				/*	    if ( nsamples_per_scan > fskp->fftsize )
 		nsamples_per_scan = fskp->fftsize;*/
-				for(int i_U = 0; Integer.toUnsignedLong(i_U) + nsamplesPerScan <= Float.parseFloat(Long.toUnsignedString(samplesNvalid_U)); i_U = (int)(Integer.toUnsignedLong(i_U) + nsamplesPerScan)) {
+                for (i = 0; i + nsamplesPerScan <= samplesNValid; i = (int) (i + nsamplesPerScan)) {
 					/*		carrier_band = fsk_detect_carrier(fskp,
 				    samplebuf+i, nsamples_per_scan,
 				    carrier_autodetect_threshold);*/
-					if(carrierBand >= 0) {
-						break;
-					}
-                    			if(Long.compareUnsigned(Integer.toUnsignedLong(advance_U), samplesNvalid_U) > 0) {
-				advance_U = (int)samplesNvalid_U;
-			}
-			if(carrierBand < 0) {
-				debugLog(cs8("autodetected carrier band not found\n"));
-				continue;
-			
-				}
-             }   
-			// default negative shift -- reasonable?
+                    if (carrierBand >= 0) {
+                        break;
+                    }
+                }
+                advance = (int) (i + nsamplesPerScan);
+                    if (advance > samplesNValid) {
+                        advance = samplesNValid;
+                    }
+                    if (carrierBand < 0) {
+                        fLogger.debug("autodetected carrier band was not found");
+                        continue;
+
+                    }
+                // default negative shift -- reasonable?
 			/*	    int b_shift = - (float)(autodetect_shift + fskp->band_width/2.0f)
 						/ fskp->band_width;*/
-			if(bfskInvertedFreqs) {
-				bShift *= -1;
-			}
-			/* only accept a carrier as b_mark if it will not result
-			 * in a b_space band which is "too low". */
-			int bSpace = carrierBand + bShift;
-			if(bSpace < 1 /*|| b_space >= fskp->nbands*/) {
-				debugLog(cs8("autodetected space band out of range\n"));
-				carrierBand = -1;
-				continue;
-			}
-	    debug_log("### TONE freq=%.1f ###\n",
-		    carrier_band * fskp->band_width);
+                if (bfskInvertedFreqs) {
+                    bShift *= -1;
+                }
+                /* only accept a carrier as b_mark if it will not result
+                 * in a b_space band which is "too low". */
+                int bSpace = carrierBand + bShift;
+                if (bSpace < 1 /*|| b_space >= fskp->nbands*/) {
+                    debugLog(cs8("autodetected space band out of range\n"));
+                    carrierBand = -1;
+                    continue;
+                }
+                debug_log("### TONE freq=%.1f ###\n",
+                        carrier_band * fskp -> band_width);
 
-	    fsk_set_tones_by_bandshift(fskp, /*b_mark*/carrier_band, b_shift);
+                fskp.fskSetTonesByBandshift(/*bMark*/ carrierBand, bShift);
+            }
         }
     }
-
 
     // example expect_bits_string
     //	  0123456789A
