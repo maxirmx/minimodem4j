@@ -4,10 +4,7 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import javax.sound.sampled.AudioFileFormat;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioInputStream;
-import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -26,6 +23,7 @@ public class SaAudioFile extends SimpleAudio {
     protected File fTmpOut = null;
     protected File fOut = null;
     protected FileChannel fTmpChannel = null;
+    protected AudioInputStream sIn = null;
 
     /**
      * Opens file
@@ -38,7 +36,7 @@ public class SaAudioFile extends SimpleAudio {
      * @return
      */
     public boolean open(File f, AudioFormat.Encoding enc, SaDirection dir,
-                        int sampleRate, int nChannels, boolean bfskMsbFirst) {
+                        int sampleRate, int nChannels, boolean bfskMsbFirst)  {
         if (f==null) {
             fLogger.error("No file specified.");
             return false;
@@ -46,6 +44,11 @@ public class SaAudioFile extends SimpleAudio {
         clean();
         direction = dir;
         fOut = f;
+
+        if (!super.open(enc, dir, sampleRate, nChannels, bfskMsbFirst)) {
+            return false;
+        }
+
         String ext = FilenameUtils.getExtension(f.getName());
         AudioFileFormat.Type[] types = AudioSystem.getAudioFileTypes();
         for (AudioFileFormat.Type value : types) {
@@ -68,27 +71,32 @@ public class SaAudioFile extends SimpleAudio {
                 clean();
                 return false;
             }
-        }
+        } else {
+            try {
+                sIn = AudioSystem.getAudioInputStream(f);
+            } catch (Exception e) {
+                fLogger.error("Failed to open audio file '%s'", f.getPath());
+                return false;
+            }
 
-        return super.open(enc, dir, sampleRate, nChannels, bfskMsbFirst);
+        }
+        return true;
     }
 
-    public boolean close()
+    public void close()
     {
-        boolean res = false;
-        try {
-            fTmpChannel.close();
-            FileInputStream fInStream = new FileInputStream(fTmpOut);
-            AudioInputStream aStream = new AudioInputStream(fInStream, aFormat, fTmpOut.length()/ getFramesize());
-            AudioSystem.write(aStream, type, fOut);
-            fInStream.close();
-        } catch (IOException ex) {
-            fLogger.error("Failed to write output file '%s' [%s]", fOut.getPath(), ex.getLocalizedMessage());
-        } catch (IllegalArgumentException ex) {
-            fLogger.error("Failed to write output file '%s [%s]", fOut.getPath(), ex.getLocalizedMessage());
+        if (direction == SA_TRANSMIT) {
+            try {
+                fTmpChannel.close();
+                FileInputStream fInStream = new FileInputStream(fTmpOut);
+                AudioInputStream aStream = new AudioInputStream(fInStream, aFormat, fTmpOut.length() / getFramesize());
+                AudioSystem.write(aStream, type, fOut);
+                fInStream.close();
+            } catch (Exception ex) {
+                fLogger.error("Failed to write output file '%s' [%s]", fOut.getPath(), ex.getLocalizedMessage());
+            }
         }
         clean();
-        return res;
     }
 
     public int write(ByteBuffer byteBuf, int nFrames) {
@@ -113,7 +121,7 @@ public class SaAudioFile extends SimpleAudio {
         return 0;
     }
 
-        protected boolean clean() {
+    protected boolean clean() {
         boolean ret = true;
 
         type = null;

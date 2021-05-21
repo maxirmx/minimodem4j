@@ -33,31 +33,21 @@ public class Transmitter {
 
     public Transmitter(SimpleAudio saOut,
                        SaToneGenerator saTone,
-                       float dataRate,
-                       float markF,
-                       float spaceF,
-                       int nDBits,
-                       float nStartBits,
-                       float nStopBits,
-                       boolean iStartStop,
-                       boolean msbFirst,
-                       int doTxSyncBytes,
-                       int syncByte,
-                       boolean printEot
-                       ) {
+                       Minimodem modem) {
+
         txSaOut = saOut;
         txToneGenerator = saTone;
-        txPrintEot = printEot;
-        bfskDataRate = dataRate;
-        bfskMarkF = markF;
-        bfskSpaceF = spaceF;
-        nDataBits = nDBits;
-        bfskNStartBits = nStartBits;
-        bfskNStopBits = nStopBits;
-        invertStartStop = iStartStop;
-        bfskMsbFirst = msbFirst;
-        bfskDoTxSyncBytes = doTxSyncBytes;
-        bfskSyncByte = syncByte;
+        txPrintEot = modem.isTxPrintEot();
+        bfskDataRate = modem.getBfskDataRate();
+        bfskMarkF = modem.getBfskMarkF();
+        bfskSpaceF = modem.getBfskSpaceF();
+        nDataBits = modem.getBfskNDataBits();
+        bfskNStartBits = modem.getBfskNStartBits();
+        bfskNStopBits = modem.getBfskNStopBits();
+        invertStartStop = modem.isInvertStartStop();
+        bfskMsbFirst = modem.isBfskMsbFirst();
+        bfskDoTxSyncBytes = modem.getBfskDoTxSyncBytes();
+        bfskSyncByte = modem.getBfskSyncByte();
     }
 
     /**

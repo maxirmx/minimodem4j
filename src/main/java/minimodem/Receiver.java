@@ -63,6 +63,7 @@ public class Receiver {
      private final boolean bfskInvertedFreqs;
      private final float fskConfidenceSearchLimit;
      private final float fskConfidenceThreshold;
+     private final boolean bfskMsbFirst;
 
      private float nSamplesPerBit;
      private int expectNBits;
@@ -74,45 +75,27 @@ public class Receiver {
      private byte[] expectSyncString;
      private Fsk fskp;
 
-    /**
-     *
-     * @param saIn
-     */
      public Receiver(SimpleAudio saIn,
-                     float dataRate,
-                     int nStartBits,
-                     float nStopBits,
-                     int nDataBits,
-                     int frameNBits,
-                     boolean iStartStop,
-                     boolean doRxSync,
-                     int syncByte,
-                     float spaceF,
-                     float markF,
-                     float bWidth,
-                     float cAutodetectThreshold,
-                     int aShift,
-                     boolean invertedFreqs,
-                     float confidenceSearchLimit,
-                     float confidenceThreshold) {
+                     Minimodem modem) {
         rxSaIn = saIn;
         sampleRate = saIn.getRate();
-        bfskDataRate = dataRate;
-        bfskNStartBits = nStartBits;
-        bfskNStopBits = nStopBits;
-        bfskNDataBits = nDataBits;
-        bfskFrameNBits = frameNBits;
-        invertStartStop = iStartStop;
-        bfskDoRxSync = doRxSync;
-        bfskSyncByte = syncByte;
-        bfskMarkF =  spaceF;
-        bfskSpaceF = markF;
-        bandWidth = bWidth;
-        carrierAutodetectThreshold = cAutodetectThreshold;
-        autodetectShift = aShift;
-        bfskInvertedFreqs = invertedFreqs;
-        fskConfidenceSearchLimit = confidenceSearchLimit;
-        fskConfidenceThreshold = confidenceThreshold;
+        bfskDataRate = modem.getBfskDataRate();
+        bfskNStartBits = modem.getBfskNStartBits();
+        bfskNStopBits = modem.getBfskNStopBits();
+        bfskNDataBits = modem.getBfskNDataBits();
+        bfskFrameNBits = modem.getBfskFrameNBits();
+        invertStartStop = modem.isInvertStartStop();
+        bfskDoRxSync = modem.isBfskDoRxSync();
+        bfskSyncByte = modem.getBfskSyncByte();
+        bfskMarkF =  modem.getBfskSpaceF();
+        bfskSpaceF = modem.getBfskMarkF();
+        bandWidth = modem.getBandWidth();
+        carrierAutodetectThreshold = modem.getCarrierAutodetectThreshold();
+        autodetectShift = modem.getAutodetectShift();
+        bfskInvertedFreqs = modem.isBfskInvertedFreqs();
+        fskConfidenceSearchLimit = modem.getFskConfidenceSearchLimit();
+        fskConfidenceThreshold = modem.getFskConfidenceThreshold();
+        bfskMsbFirst = modem.isBfskMsbFirst();
      }
 
     public void configure(byte[] expctDataString) {
@@ -171,7 +154,7 @@ public class Receiver {
 
     }
 
-    public int receive(IEncodeDecode decoder, boolean quietMode, boolean rxOne) {
+    public int receive(IEncodeDecode decoder, boolean quietMode, boolean outputPrintFilter, boolean rxOne) {
 
         int samplesNValid = 0;
         int ret = 0;
@@ -373,13 +356,11 @@ public class Receiver {
 
                 if (!quietMode) {
                     if (bfskDataRate >= 100) {
-                        System.err.printf("### CARRIER %s @ %.1f Hz ", Integer.toUnsignedString((int) (bfskDataRate + 0.5f)), (double) (fskp.bMark * bandWidth));
+                        fLogger.info("### CARRIER %.2f @ %.1f Hz ", Integer.toUnsignedString((int) (bfskDataRate + 0.5f)), fskp.getbMark() * bandWidth);
                     } else {
-                        System.err.printf("### CARRIER %.2f @ %.1f Hz ", (double) bfskDataRate, (double) (fskp.bMark * bandWidth));
+                        fLogger.info("### CARRIER %.2f @ %.1f Hz ", bfskDataRate, fskp.getbMark() * bandWidth);
                     }
-                }
-                if(!quietMode) {
-                    System.err.println("###");
+                    fLogger.info("###");
                 }
 
                 carrier = true;
@@ -398,25 +379,16 @@ public class Receiver {
                     tryConfidenceSearchLimit = Float.POSITIVE_INFINITY;
                 }
 
-
-
-                float confidence2 = 0, amplitude2 = 0;
-                boolean bits2_U = false;
-                boolean frameStartSample2_U = false;
-                confidence2 = fsk_find_frame(fskp, samplebuf, expect_nsamples,
-                        try_first_sample,
-                        try_max_nsamples,
-                        try_step_nsamples,
-                        try_confidence_search_limit,
-                        carrier ? expect_data_string : expect_sync_string,
-                        &bits2,
-			    &amplitude2,
-			    &frame_start_sample2
-			    );
-                if(confidence2 > confidence) {
-                    bits_U = bits2_U;
-                    amplitude = amplitude2;
-                    frameStartSample = frameStartSample2_U;
+                resFF = fskp.fskFindFrame(sampleBuf, expectNSamples,
+                        tryFirstSample_U,
+                        tryMaxNSamples,
+                        tryStepNsamples,
+                        tryConfidenceSearchLimit,
+                        carrier ? expectDataString : expectSyncString);
+                if((float)resFF[0] > confidence) {
+                    bits_U = (long) resFF[1];
+                    amplitude = (float) resFF[2];
+                    frameStartSample = (int) resFF[3];
                 }
 
             }
@@ -473,11 +445,11 @@ public class Receiver {
 
             // suppress printing of bfsk_sync_byte bytes
             if(bfskDoRxSync) {
-                if(!dataoutNbytes_U && bits_U == bfskSyncByte) {
+                if(dataoutNbytes_U == 0 && bits_U == bfskSyncByte) {
                     continue;
                 }
             }
-            dataoutNbytes_U += decoder.decode(dataoutbuf.shift(dataoutNbytes_U), dataoutSize_U - dataoutNbytes_U, bits_U, bfskNDataBits);
+            dataoutNbytes_U = decoder.decode(dataoutbuf, dataoutSize_U , bits_U, bfskNDataBits);
 
             if(dataoutNbytes_U == 0) {
                 continue;
@@ -485,24 +457,20 @@ public class Receiver {
             /*
              * Print the output buffer to stdout
              */
-            if(!outputPrintFilter) {
-                if(write(1, dataoutbuf, dataoutNbytes_U) < 0) {
-                    perror(cs8("write"));
+            for(int p=0; dataoutNbytes_U != 0; p++, dataoutNbytes_U--) {
+                char printable;
+                if(!outputPrintFilter) {
+                    printable = (char) dataoutbuf[p];
+                } else {
+                    printable = (Character.isISOControl(dataoutbuf[p]) || Character.isSpaceChar(dataoutbuf[p])) ?  '.' : (char) dataoutbuf[p];
                 }
-            } else {
-                String8 p = dataoutbuf;
-                for(; dataoutNbytes_U != 0; p = p.shift(1), dataoutNbytes_U--) {
-                    String8 printableChar = String8.fromData((byte)((int)(isprint(p.get()) != 0 || isspace(p.get()) != 0 ? p.get() : '.')));
-                    if(write(1, printableChar, 1) < 0) {
-                        perror(cs8("write"));
-                    }
-                }
+                System.out.print(printable);
             }
             if(carrier) {
                 if(!quietMode) {
                     reportNoCarrier(sampleRate,
                             bfskDataRate,
-                            frameNBits,
+                            bfskFrameNBits,
                             nFramesDecoded,
                             carrierNSamples,
                             confidenceTotal,
@@ -512,57 +480,78 @@ public class Receiver {
         }
         return ret;
     }
-    private static void reportNoCarrier(int sampleRate_U,
+
+    /**
+     * A function to report "no carrier"
+     * @param sampleRate
+     * @param bfskDataRate
+     * @param frameNBits
+     * @param nFramesDecoded
+     * @param carrierNSamples
+     * @param confidenceTotal
+     * @param amplitudeTotal
+     */
+    private static void reportNoCarrier(int sampleRate,
                                         float bfskDataRate,
                                         float frameNBits,
-                                        int nframesDecoded_U,
-                                        long carrierNsamples_U,
+                                        int nFramesDecoded,
+                                        long carrierNSamples,
                                         float confidenceTotal,
                                         float amplitudeTotal) {
-        float nbitsDecoded = Integer.toUnsignedLong(nframesDecoded_U) * frameNBits;
-        float throughputRate = nbitsDecoded * Integer.toUnsignedLong(sampleRate_U) / Float.parseFloat(Long.toUnsignedString(carrierNsamples_U));
-        System.err.printf("\n### NOCARRIER ndata=%s confidence=%.3f ampl=%.3f bps=%.2f", Integer.toUnsignedString(nframesDecoded_U), (double)(confidenceTotal / Integer.toUnsignedLong(nframesDecoded_U)), (double)(amplitudeTotal / Integer.toUnsignedLong(nframesDecoded_U)), (double)throughputRate);
-        if((long)(nbitsDecoded * Integer.toUnsignedLong(sampleRate_U) + 0.5f) == (long)(bfskDataRate * Float.parseFloat(Long.toUnsignedString(carrierNsamples_U)))) {
-            System.err.println(" (rate perfect) ###");
+        float nBitsDecoded = nFramesDecoded * frameNBits;
+        float throughputRate = nBitsDecoded * sampleRate / carrierNSamples;
+        fLogger.info("\n### NOCARRIER ndata=%d confidence=%.3f ampl=%.3f bps=%.2f",
+                nFramesDecoded,
+                confidenceTotal/ nFramesDecoded,
+                amplitudeTotal / nFramesDecoded,
+                throughputRate);
+        if((long)(nBitsDecoded * sampleRate + 0.5f) == (long)(bfskDataRate * carrierNSamples)) {
+            fLogger.info(" (rate perfect) ###");
         } else {
             float throughputSkew = (throughputRate - bfskDataRate) / bfskDataRate;
-            System.err.printf(" (%.1f%% %s) ###\n",
-                    (float)(Math.abs(throughputSkew) * 100.0f),
-                    (((long)FLOAT_SIZE) == ((long)FLOAT_SIZE) ? signbitf(throughputSkew) :
-                            ((long)FLOAT_SIZE) == ((long)DOUBLE_SIZE) ? signbit(throughputSkew) : signbitl(throughputSkew)) != 0 ? cs8("slow") : cs8("fast"));
+            fLogger.info(" (%.1f%% %s) ###",
+                    (float)(Math.abs(throughputSkew) * 100.0f), Math.signum(throughputSkew) < 0 ? "slow" : "fast");
         }
     }
-    // example expect_bits_string
-    //	  0123456789A
-    //	  isddddddddp	i == idle bit (a.k.a. prev_stop bit)
-    //			s == start bit  d == data bits  p == stop bit
-    // ebs = "10dddddddd1"  <-- expected mark/space framing pattern
-    //
-    // NOTE! expect_n_bits ends up being (frame_n_bits+1), because
-    // we expect the prev_stop bit in addition to this frame's own
-    // (start + n_data_bits + stop) bits.  But for each decoded frame,
-    // we will advance just frame_n_bits worth of samples, leaving us
-    // pointing at our stop bit -- it becomes the next frame's prev_stop.
-    //
-    //                  prev_stop--v
-    //                       start--v        v--stop
-    // char *expect_bits_string = "10dddddddd1";
-    //
 
+
+    /**
+     * Builds expected bits string
+     * Example expect_bits_string
+     *	  0123456789A
+     *	  isddddddddp	i == idle bit (a.k.a. prev_stop bit)
+     *			s == start bit  d == data bits  p == stop bit
+     * ebs = "10dddddddd1"  <-- expected mark/space framing pattern
+     *
+     * NOTE! expect_n_bits ends up being (frame_n_bits+1), because
+     * we expect the prev_stop bit in addition to this frame's own
+     * (start + n_data_bits + stop) bits.  But for each decoded frame,
+     * we will advance just frame_n_bits worth of samples, leaving us
+     * pointing at our stop bit -- it becomes the next frame's prev_stop.
+     *
+     *                  prev_stop--v
+     *                       start--v        v--stop
+     * char *expect_bits_string = "10dddddddd1";
+     *
+     * @param expectBitsString
+     * @param useExpectBits
+     * @param expectBits
+     * @return
+     */
     protected int buildExpectBitsString(byte[] expectBitsString,
                                         int useExpectBits,
                                         long expectBits) {
         byte startBitValue = (byte)(invertStartStop ? '1' : '0');
         byte stopBitValue = (byte)(invertStartStop ? '0' : '1');
-        int j = 0;
+        int i, j = 0;
         if(bfskNStopBits != 0.0f) {
             expectBitsString[j++] = stopBitValue;
         }
         // Nb. only integer number of start bits works (for rx)
-        for(int i = 0; i < bfskNStartBits; i++) {
+        for(i = 0; i < bfskNStartBits; i++) {
             expectBitsString[j++] = startBitValue;
         }
-        for(int i = 0; i < bfskNDataBits; i++, j++) {
+        for(i = 0; i < bfskNDataBits; i++, j++) {
             if(useExpectBits != 0) {
                 expectBitsString[j] = (byte)((expectBits >>> i & 1) + '0');
             } else {

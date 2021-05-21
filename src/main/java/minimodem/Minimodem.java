@@ -96,7 +96,12 @@ class Minimodem implements Callable<Integer> {
 			parameterConsumer = NStopBitsParameterConsumer.class)
 			protected float bfskNStopBits = -1.0f;
 	@Option(names = {"--invert-start-stop"})											protected boolean invertStartStop;
-	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}")								protected int bfskSyncByte = -1;
+	@Option(names = {"--sync-byte"}, paramLabel = "{0xXX}",
+			description = "If this option is used, initial carrier acquisition will be suppressed " +
+					"until after one or more consecutive data frame(s) containing this value " +
+					"are received.  This can be used to synchronize the stream for protocols " +
+					"which include a fixed preamble byte. (This option applies to --rx mode only).")
+			protected int bfskSyncByte = -1;
 	@Option(names = {"-q", "--quiet"},
 			description="Do not report CARRIER / NOCARRIER or signal analysis metrics.")
 			protected boolean quiteMode;
@@ -117,7 +122,6 @@ class Minimodem implements Callable<Integer> {
 	@Option(names = {"--rx-one"},
 			description = "Quit after the first carrier/no-carrier event (applies to --rx mode only).")
 			protected boolean rxOne;
-	@Option(names = {"--benchmarks"})													protected boolean oBenchmarks;
 	@Option(names = {"--binary-output"},
 			description="Print received data bits as raw binary output using characters '0' and '1'. " +
 					"The bits are printed in the order they are received.  Framing bits (start " +
@@ -131,7 +135,10 @@ class Minimodem implements Callable<Integer> {
 					"bitstream (8 databits + 1 start bit + 1 stop bit), use '--binary-raw 10' " +
 					" or a multiple of 10. (This option applies to --rx mode only).")
 			protected int outputModeRawNBits=0;
-	@Option(names = {"--print-filter"})													protected boolean oPrintFilter;
+	@Option(names = {"--print-filter"},
+			description = "Filter the received text output, replacing any 'non-printable' bytes " +
+					"with a '.' character. (This option applies to --rx mode only).")
+			protected boolean outputPrintFilter;
 	@Option(names = {"--print-eot"},
 			description="Print '### EOT' to log after each transmit completes." )
 			protected boolean txPrintEot = false;
@@ -212,17 +219,7 @@ class Minimodem implements Callable<Integer> {
 		fLogger.info("Transmitting ...");
 		Transmitter tx = new Transmitter(saOut,
 				toneGenerator,
-				bfskDataRate,
-				bfskMarkF,
-				bfskSpaceF,
-				bfskNDataBits,
-				bfskNStartBits,
-				bfskNStopBits,
-				invertStartStop,
-				bfskMsbFirst,
-				bfskDoTxSyncBytes,
-				bfskSyncByte,
-				txPrintEot);
+				this);
 
 		tx.fskTransmitStdin(bfskDatabitsEncodeDecode);
 		saOut.close();
@@ -243,26 +240,10 @@ class Minimodem implements Callable<Integer> {
 		saIn.setRxNoise(rxNoiseFactor);
 		fLogger.info("Audio file is ready");
 
-		Receiver rx = new Receiver(saIn,
-				bfskDataRate,
-				bfskNStartBits,
-				bfskNStopBits,
-				bfskNDataBits,
-				bfskFrameNBits,
-				invertStartStop,
-				bfskDoRxSync,
-				bfskSyncByte,
-				bfskMarkF,
-				bfskSpaceF,
-				bandWidth,
-				carrierAutodetectThreshold,
-				autodetectShift,
-				bfskInvertedFreqs,
-				fskConfidenceSearchLimit,
-				fskConfidenceThreshold);
+		Receiver rx = new Receiver(saIn,this);
 
 		rx.configure(expectDataString);
-		rx.receive(quiteMode, rxOne);
+		rx.receive(bfskDatabitsEncodeDecode, quiteMode, outputPrintFilter, rxOne);
 
 		return 0;
 	}
@@ -452,4 +433,84 @@ class Minimodem implements Callable<Integer> {
 
 		return 0;
 	}
+
+	public float getBfskDataRate() {
+		return bfskDataRate;
+	}
+
+	public int getBfskNStartBits() {
+		return bfskNStartBits;
+	}
+
+	public float getBfskNStopBits() {
+		return bfskNStopBits;
+	}
+
+	public int getBfskNDataBits() {
+		return bfskNDataBits;
+	}
+
+	public int getBfskFrameNBits() {
+		return bfskFrameNBits;
+	}
+
+	public boolean isInvertStartStop() {
+		return invertStartStop;
+	}
+
+	public boolean isBfskDoRxSync() {
+		return bfskDoRxSync;
+	}
+
+	public int getBfskSyncByte() {
+		return bfskSyncByte;
+	}
+
+	public float getBfskMarkF() {
+		return bfskMarkF;
+	}
+
+	public float getBfskSpaceF() {
+		return bfskSpaceF;
+	}
+
+	public float getBandWidth() {
+		return bandWidth;
+	}
+
+	public float getCarrierAutodetectThreshold() {
+		return carrierAutodetectThreshold;
+	}
+
+	public int getAutodetectShift() {
+		return autodetectShift;
+	}
+
+	public boolean isBfskInvertedFreqs() {
+		return bfskInvertedFreqs;
+	}
+
+	public float getFskConfidenceSearchLimit() {
+		return fskConfidenceSearchLimit;
+	}
+
+	public float getFskConfidenceThreshold() {
+		return fskConfidenceThreshold;
+	}
+
+	public boolean isBfskMsbFirst() {
+		return bfskMsbFirst;
+	}
+
+	public int getBfskDoTxSyncBytes() {
+		return bfskDoTxSyncBytes;
+	}
+
+	public boolean isTxPrintEot() {
+		return txPrintEot;
+	}
+
+
+
+
 }

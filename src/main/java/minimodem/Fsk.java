@@ -26,8 +26,6 @@ public class Fsk {
     private int	  fftSize;
     private int   bMark;
     private int   bSpace;
-    private float[] fftin = null;
-    private float[] fftout = null;
 ///	fftwf_plan	fftplan; https://www.nayuki.io/res/free-small-fft-in-multiple-languages/Fft.java
 
     public Fsk(float sampleRate, float fMark, float fSpace, float filterBw) {
@@ -365,6 +363,8 @@ public class Fsk {
     public int getnBands() {
         return nBands;
     }
+
+    public int getbMark() { return bMark; }
 
 
 
