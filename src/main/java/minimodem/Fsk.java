@@ -8,15 +8,17 @@ import java.util.Arrays;
 public class Fsk {
     private static final Logger fLogger = LogManager.getFormatterLogger("Fsk");
 
-    public final static double FSK_MIN_MAGNITUDE = 0.0f;
-    public final static double FSK_MIN_BIT_SNR = 1.0f;
+    // Negative values mean not using fast fallbacks
+    // Used to be conditional compilation in original C code
+    public final static double FSK_MIN_MAGNITUDE = -1.0f;
+    public final static double FSK_MIN_BIT_SNR = -1.0f;
 
-
+    public final static int CONFIDENCE_ALGO = 6;
 
     private final float bandWidth;
     private final int  nBands;
 
-    private float sampleRate;
+    private final float sampleRate;
     private float fMark;
     private float fSpace;
     private float filterBw;
@@ -63,9 +65,16 @@ public class Fsk {
         this.fSpace = bSpace * this.bandWidth;
     }
 
+    /**
+     * Carrier detector
+     * @param samples            Array of samples
+     * @param pSamples           Starting position to analyze
+     * @param nSamples           Number of samples to analyze
+     * @param minMagThreshold    Carrier threshold
+     * @return    Carrier band or -1 if no carrier was detected
+     */
     public int fskDetectCarrier(float[] samples, int pSamples, int nSamples, float minMagThreshold) {
-        assert nSamples<=fftSize;
-        int paNChannels = 1; // FIXME
+//        int paNChannels = 1; // FIXME
         float[] fftin = Arrays.copyOfRange(samples, pSamples, pSamples+nSamples);
 //        fftwfExecute(fskp[0].getFftplan());
         float[][] fftout = new float[nSamples][2];
@@ -89,171 +98,199 @@ public class Fsk {
         return maxMagBand;
     }
 
-    private static void fskBitAnalyze(FskPlan[] fskp, float[] samples, int bitNsamples_U, int[] bitOutp_U, float[] bitSignalMagOutp, float[] bitNoiseMagOutp) {
-        // FIXME: Fast and loose ... don't bzero fftin, just assume its only ever
-        // been used for bit_nsamples so the remainder is still zeroed.  Sketchy.
-        //
-        // unsigned int pa_nchannels = 1;	// FIXME
-        // bzero(fskp->fftin, (fskp->fftsize * sizeof(float) * pa_nchannels));
+    /**
+     * Bit analizer
+     * @param samples       Array of samples
+     * @param pSamples      Starting position to analyze
+     * @param nSamples      Number of samples to analyze
+     * @return  Number[3]   [0] -->  Bit value (1/0): integer
+     *                      [1] -->  Signal magnitude: float
+     *                      [2] -->  Noise magnitude:  float
+     */
+    private Number[] fskBitAnalyze(float[] samples, int pSamples, int nSamples) {
+        Number[] res = new Number[3];
+        float[] fftin = Arrays.copyOfRange(samples, pSamples, pSamples+nSamples);
+        float[][] fftout = new float[nSamples][2];
 
-        nnc(fskp[0].getFftin()).copyFrom(samples, bitNsamples_U);
-
-        float magscalar = 2.0f / Integer.toUnsignedLong(bitNsamples_U);
+        float magScalar = 2.0f / nSamples;
 //        fftwf_execute(fskp->fftplan);
-        float magMark = bandMag(fskp[0].getFftout(), fskp[0].getBMark_U(), magscalar);
-        float magSpace = bandMag(fskp[0].getFftout(), fskp[0].getBSpace_U(), magscalar);
+        float magMark = bandMag(fftout, bMark, magScalar);
+        float magSpace = bandMag(fftout, bSpace, magScalar);
         // mark==1, space==0
         if(magMark > magSpace) {
-            bitOutp_U[0] = 1;
-            bitSignalMagOutp[0] = magMark;
-            bitNoiseMagOutp[0] = magSpace;
+            res[0] = 1;                 // bitOutp
+            res[1] = magMark;           // bitSignalMagOutp
+            res[2] = magSpace;          // bitNoiseMagOutp
         } else {
-            bitOutp_U[0] = 0;
-            bitSignalMagOutp[0] = magSpace;
-            bitNoiseMagOutp[0] = magMark;
+            res[0] = 0;                 // bitOutp
+            res[1] = magSpace;          // bitNoiseMagOutp
+            res[2] = magMark;           // bitSignalMagOutp
         }
-        float magSpace = bandMag(fskp[0].getFftout(), fskp[0].getBSpace_U(), magscalar);
-        debugLog(cs8("\t%.2f  %.2f  %s  bit=%u sig=%.2f noise=%.2f\n"), magMark, magSpace, magMark > magSpace ? cs8("mark      ") : cs8("     space"), bitOutp_U[0], bitSignalMagOutp[0], bitNoiseMagOutp[0]);
+        fLogger.debug("\t%.2f  %.2f  %s  bit=%u sig=%.2f noise=%.2f", magMark, magSpace,
+                magMark > magSpace ? "mark      ":"     space",
+                res[0], res[1], res[2]);
 
-
+        return res;
     }
 
     /**
      * returns confidence value [0.0 to INFINITY]
      */
-    private static float fskFrameAnalyze(FskPlan[] fskp, float[] samples, float samplesPerBit, int nBits, byte[] expectBitsString, long[] bitsOutp_U, float[] amplOutp) {
-        int bitNsamples_U = (int)(samplesPerBit + 0.5f);
+    private Number[] fskFrameAnalyze(float[] samples,
+                                     int pSamples,
+                                     float samplesPerBit,
+                                     int nBits,
+                                     byte[] expectBitsString) {
 
-        int[] bitValues_U = new int[64];
+        Number[] res = new Number[3];
+        // Initialize with failure return values
+        res[0] = 0.0f;              // confidence
+        res[1] = 0L;                // bitsOutp
+        res[2] = 0.0f;              // amplOutp;
+
+        int bitNSamples = (int)(samplesPerBit + 0.5f);
+        int[] bitValues = new int[64];
         float[] bitSigMags = new float[64];
         float[] bitNoiseMags = new float[64];
-        int bitBeginSample_U;
+        int bitBeginSample;
         int bitnum;
         byte[] expectBits = expectBitsString;
 
         /* pass #1 - process and check only the "required" (1/0) expect_bits */
-        for(int bitnum = 0; bitnum < nBits; bitnum++) {
-            if(expectBits[bitnum] == 'd') {
+        for(bitnum = 0; bitnum < nBits; bitnum++) {
+            if (expectBits[bitnum] == 'd') {
                 continue;
             }
             assert expectBits[bitnum] == '1' || expectBits[bitnum] == '0';
 
-            bitBeginSample_U = (int)(samplesPerBit * bitnum + 0.5f);
-            debugLog(cs8(" bit# %2d @ %7u: "), bitnum, bitBeginSample_U);
+            bitBeginSample = pSamples + (int) (samplesPerBit * bitnum + 0.5f);
+            fLogger.debug(" bit# %2d @ %7d: ", bitnum, bitBeginSample);
 
-            fskBitAnalyze(fskp, nnc(samples).shift(bitBeginSample_U), bitNsamples_U, bitValues_U.shift(bitnum), bitSigMags.shift(bitnum), bitNoiseMags.shift(bitnum));
-            if(expectBits[bitnum] - '0' != bitValues_U[bitnum]) {
-                return 0.0f; /* does not match expected; abort frame analysis. */
+            Number[] baRes = fskBitAnalyze(samples,bitBeginSample, bitNSamples);
+            bitValues[bitnum] = (int) baRes[0];
+            bitSigMags[bitnum] = (float) baRes[1];
+            bitNoiseMags[bitnum] = (float) baRes[2];
+
+            if (expectBits[bitnum] - '0' != bitValues[bitnum]) {
+                return res; /* does not match expected; abort frame analysis. */
             }
-            #ifdef
-            float bitSnr = bitSigMags[bitnum] / bitNoiseMags[bitnum];
-            if(bitSnr < FSK_MIN_BIT_SNR) {
-                return 0.0f;
+
+            if (bitSigMags[bitnum] / bitNoiseMags[bitnum] < FSK_MIN_BIT_SNR) {
+                return res;
             }
-            #endif
 
             // Performance hack: reject frame early if sig mag isn't even half
             // of FSK_MIN_MAGNITUDE
-            #ifdef
-            if(bitSigMags[bitnum] < FSK_MIN_MAGNITUDE / 2.0) {
-                return 0.0f; // too weak; abort frame analysis
+            if (bitSigMags[bitnum] < FSK_MIN_MAGNITUDE / 2.0) {
+                return res; // too weak; abort frame analysis
             }
-            #endif
-            /* pass #2 - process only the dontcare ('d') expect_bits */
-            for(int bitnum = 0; bitnum < nBits; bitnum++) {
-                if(expectBits[bitnum] != 'd') {
-                    continue;
-                }
-                bitBeginSample_U = (int)(samplesPerBit * bitnum + 0.5f);
-                debugLog(cs8(" bit# %2d @ %7u: "), bitnum, bitBeginSample_U);
-                fskBitAnalyze(fskp, nnc(samples).shift(bitBeginSample_U), bitNsamples_U, bitValues_U.shift(bitnum), bitSigMags.shift(bitnum), bitNoiseMags.shift(bitnum));
-            #ifdef
-                float bitSnr = bitSigMags[bitnum] / bitNoiseMags[bitnum];
-                if(bitSnr < FSK_MIN_BIT_SNR) {
-                    return 0.0f;
-                }
-            #endif
+        }
+        /* pass #2 - process only the dontcare ('d') expect_bits */
+        for(bitnum = 0; bitnum < nBits; bitnum++) {
+            if(expectBits[bitnum] != 'd') {
+                continue;
             }
+            bitBeginSample = pSamples + (int)(samplesPerBit * bitnum + 0.5f);
+            fLogger.debug(" bit# %2d @ %7d: ", bitnum, bitBeginSample);
+            Number[] resBA = fskBitAnalyze(samples, bitBeginSample, bitNSamples);
+            bitValues[bitnum] = (int) resBA[0];
+            bitSigMags[bitnum] = (float) resBA[1];
+            bitNoiseMags[bitnum] = (float) resBA[2];
 
-            float confidence;
-            float totalBitSig = 0.0f, totalBitNoise = 0.0f;
-            float avgMarkSig = 0.0f, avgSpaceSig = 0.0f;
-            int nMark_U = 0, nSpace_U = 0;
-
-            for(int bitnum = 0; bitnum < nBits; bitnum++) {
-                // Deal with floating point data type quantization noise...
-                // If total_bit_noise <= FLT_EPSILON, then assume it to be 0.0,
-                // so that we end up with snr==inf.
-                totalBitSig += bitSigMags[bitnum];
-                if(bitNoiseMags[bitnum] > FLT_EPSILON) {
-                    totalBitNoise += bitNoiseMags[bitnum];
-                }
-
-                if(bitValues_U[bitnum] == 1) {
-                    avgMarkSig += bitSigMags[bitnum];
-                    nMark_U++;
-                } else {
-                    avgSpaceSig += bitSigMags[bitnum];
-                    nSpace_U++;
-                }
+            if(bitSigMags[bitnum] / bitNoiseMags[bitnum] < FSK_MIN_BIT_SNR) {
+                return res;
             }
-
-            // Compute the "frame SNR"
-            float snr = totalBitSig / totalBitNoise;
-
-            // Compute avg bit sig and noise magnitudes
-            float avgBitSig = totalBitSig / nBits;
-
-            // Compute separate avg bit sig for mark and space
-            if(nMark_U != 0) {
-                avgMarkSig /= Integer.toUnsignedLong(nMark_U);
-            }
-            if(nSpace_U != 0) {
-                avgSpaceSig /= Integer.toUnsignedLong(nSpace_U);
-            }
-            // Compute average "divergence": bit_mag_divergence / other_bits_mag
-            float divergence = 0.0f;
-            for(bitnum = 0; bitnum < nBits; bitnum++) {
-                float avgBitSigOther;
-                avgBitSigOther = bitValues_U[bitnum] != 0 ? avgMarkSig : avgSpaceSig;
-                divergence += Math.abs(bitSigMags[bitnum] - avgBitSigOther) / avgBitSigOther;
-            }
-            divergence *= 2;
-            divergence /= nBits;
-
-            debugLog(cs8("    divg=%.3f snr=%.3f avg{bit_sig=%.3f bit_noise=%.3f(%s)}\n"), (MethodRef0<Integer>)ImplicitDeclarations::divergence, (MethodRef0<Integer>)ImplicitDeclarations::snr, (MethodRef0<Integer>)ImplicitDeclarations::avgBitSig, avgBitNoise, avgBitNoise == 0.0 ? cs8("zero") : cs8("non-zero"));
-
-            #ifdef
-            if(avgBitSig < FSK_MIN_MAGNITUDE) {
-                return 0.0f; // too weak; reject frame
-            }
-            #endif
-
-            // Frame confidence is the frame ( SNR * consistency )
-            confidence = snr * (1.0f - divergence);
-            amplOutp[0] = avgBitSig;
-
-            // least significant bit first ... reverse the bits as we place them
-            // into the bits_outp word.
-            bitsOutp_U[0] = 0;
-            for(int bitnum = 0; bitnum < nBits; bitnum++) {
-                bitsOutp_U[0] = bitsOutp_U[0] | Integer.toUnsignedLong(bitValues_U[bitnum]) << bitnum;
-            }
-
-            debugLog(cs8("    frame algo=%d confidence=%f ampl=%f\n"), (MethodRef0<Integer>)ImplicitDeclarations::confidenceAlgo, confidence, amplOutp[0]);
-            return confidence;
-
-
         }
 
-        return 0;
+        float confidence;
+        float totalBitSig = 0.0f, totalBitNoise = 0.0f;
+        float avgMarkSig = 0.0f, avgSpaceSig = 0.0f;
+        int nMark_U = 0, nSpace_U = 0;
+
+        for(bitnum = 0; bitnum < nBits; bitnum++) {
+            // Deal with floating point data type quantization noise...
+            // If total_bit_noise <= FLT_EPSILON, then assume it to be 0.0,
+            // so that we end up with snr==inf.
+            totalBitSig += bitSigMags[bitnum];
+            if(bitNoiseMags[bitnum] > Float.MIN_VALUE) {
+                totalBitNoise += bitNoiseMags[bitnum];
+            }
+
+            if(bitValues[bitnum] == 1) {
+                avgMarkSig += bitSigMags[bitnum];
+                nMark_U++;
+            } else {
+                avgSpaceSig += bitSigMags[bitnum];
+                nSpace_U++;
+            }
+        }
+
+        // Compute the "frame SNR"
+        float snr = totalBitSig / totalBitNoise;
+
+        // Compute avg bit sig and noise magnitudes
+        float avgBitSig = totalBitSig / nBits;
+
+        // Compute separate avg bit sig for mark and space
+        if(nMark_U != 0) {
+            avgMarkSig /= Integer.toUnsignedLong(nMark_U);
+        }
+        if(nSpace_U != 0) {
+            avgSpaceSig /= Integer.toUnsignedLong(nSpace_U);
+        }
+        // Compute average "divergence": bit_mag_divergence / other_bits_mag
+        float divergence = 0.0f;
+        for(bitnum = 0; bitnum < nBits; bitnum++) {
+            float avgBitSigOther;
+            avgBitSigOther = bitValues[bitnum] != 0 ? avgMarkSig : avgSpaceSig;
+            divergence += Math.abs(bitSigMags[bitnum] - avgBitSigOther) / avgBitSigOther;
+        }
+        divergence *= 2;
+
+        divergence /= nBits;
+        float avgBitNoise = totalBitNoise / nBits;
+        fLogger.debug("    divg=%.3f snr=%.3f avg{bit_sig=%.3f bit_noise=%.3f(%s)}",
+                    divergence, snr, avgBitSig, avgBitNoise, avgBitNoise == 0.0 ? "zero" : "non-zero");
+
+        if(avgBitSig < FSK_MIN_MAGNITUDE) {
+            return res; // too weak; reject frame
+        }
+
+        // Frame confidence is the frame ( SNR * consistency )
+        confidence = snr * (1.0f - divergence);
+
+        // least significant bit first ... reverse the bits as we place them
+        // into the bits_outp word.
+        long bitsOutp = 0;
+        for(bitnum = 0; bitnum < nBits; bitnum++) {
+            bitsOutp = bitsOutp | Integer.toUnsignedLong(bitValues[bitnum]) << bitnum;
+        }
+            fLogger.debug("    frame algo=%d confidence=%f ampl=%f", CONFIDENCE_ALGO, confidence, avgBitSig);
+
+        res[0] = confidence;
+        res[1] = bitsOutp;
+        res[2] = avgBitSig;
+        return res;
     }
 
+    public Number[] fskFindFrame(float[] samples,
+                                     int frameNsamples_U,
+                                     int tryFirstSample_U,
+                                     int tryMaxNsamples_U,
+                                     int tryStepNsamples_U,
+                                     float tryConfidenceSearchLimit,
+                                     byte[] expectBitsString) {
 
-    public static float fskFindFrame(float[] samples, int frameNsamples_U, int tryFirstSample_U, int tryMaxNsamples_U, int tryStepNsamples_U, float tryConfidenceSearchLimit, String8 expectBitsString, long[] bitsOutp_U, float[] amplOutp, int[] frameStartOutp_U) {
-        int expectNBits = expectBitsString.length();
+        Number[] res = new Number[4];
+        // Initialize with failure return values
+        res[0] = 0.0f;              // confidence
+        res[1] = 0L;                // bitsOutp
+        res[2] = 0.0f;              // amplOutp;
+        res[3] = 0;                 // frameStartOutp;
+
+        int expectNBits = expectBitsString.length;
         assert expectNBits <= 64; // protect fsk_frame_analyze()
-        float samplesPerBit = Integer.toUnsignedLong(frameNsamples_U) / expectNBits;
+        float samplesPerBit = frameNsamples_U / expectNBits;
         // try_step_nsamples = 1;	// pedantic TEST
         int bestT_U = 0;
         float bestC = 0.0f, bestA = 0.0f;
@@ -270,11 +307,12 @@ public class Fsk {
             if (t < 0) {
                 continue;
             }
-            float c;
-            FloatContainer amplOut = FloatContainer.fromData(0.0f);
-            LongContainer bitsOut_U = LongContainer.fromData(0);
-            debugLog(cs8("try fsk_frame_analyze at t=%d\n"), t);
-            c = fskFrameAnalyze(fskp, nnc(samples).shift(t), samplesPerBit, expectNBits, expectBitsString, bitsOut_U, amplOut);
+
+            fLogger.debug("try fsk_frame_analyze at t=%d", t);
+            Number[] resFA = fskFrameAnalyze(samples, t, samplesPerBit, expectNBits, expectBitsString);
+            float c = (float) resFA[0];
+            long bitsOut_U = (long) resFA[1];
+            float amplOut = (float) resFA[2];
             if (bestC < c) {
                 bestT_U = t;
                 bestC = c;
@@ -286,38 +324,31 @@ public class Fsk {
                     break;
                 }
             }
-            bitsOutp_U[0] = bestBits_U;
-            amplOutp[0] = bestA;
-            frameStartOutp_U[0] = bestT_U;
-
-            float confidence = bestC;
-
-            if (confidence == 0) {
-                return 0;
-            }
-#ifdef
-            byte bitchar_U;
-            // FIXME? hardcoded chop off framing bits for debug
-            // Hmmm... we have now way to  distinguish between:
-            // 		8-bit data with no start/stopbits == 8 bits
-            // 		5-bit with prevstop+start+stop == 8 bits
-            switch (expectNBits) {
-                case 11:
-                    bitchar_U = (byte) (bitsOutp_U[0] >>> 2 & 0xFF);
-                    break;
-                case 8:
-                default:
-                    bitchar_U = (byte) (bitsOutp_U[0] & 0xFF);
-                    break;
-            }
-            debugLog(cs8("FSK_FRAME bits='"));
-            for (int j = 0; j < expectNBits; j++) {
-                debugLog(cs8("%c"), (bitsOutp_U[0] >>> j & 1) != 0 ? '1' : '0');
-            }
-            debugLog(cs8("' datum='%c' (0x%02x)   c=%f  a=%f  t=%u\n"), isprint(bitchar_U) != 0 || isspace(bitchar_U) != 0 ? Byte.toUnsignedInt(bitchar_U) : '.', bitchar_U, (MethodRef0<Integer>) ImplicitDeclarations::confidence, (MethodRef0<Integer>) ImplicitDeclarations::bestA, bestT_U);
-#endif
-            return confidence;
         }
+        /*
+         * FIXME? hardcoded chop off framing bits for debug
+         * Hmmm... we have now way to  distinguish between:
+         *     8-bit data with no start/stopbits == 8 bits
+         *     5-bit with prevstop+start+stop == 8 bits
+         */
+        byte byteChar = (expectNBits==11)?
+                    (byte) (bestBits_U >>> 2 & 0xFF):
+                    (byte) (bestBits_U & 0xFF);
+        StringBuilder frm = new StringBuilder("FSK_FRAME bits='");
+        for (int j = 0; j < expectNBits; j++) {
+                frm.append((bestBits_U >>> j & 1) != 0 ? '1' : '0');
+        }
+        frm.append("' datum=").
+                    append((Character.isISOControl(byteChar) || Character.isSpaceChar(byteChar)) ? '.' : byteChar).
+                    append("'");
+        fLogger.debug("%s (0x%02x)   c=%f  a=%f  t=%u", frm.toString(), byteChar, bestC, bestA, bestT_U);
+
+        res[0] = bestC;
+        res[1] = bestBits_U;
+        res[2] = bestA;
+        res[3] = bestT_U;
+
+        return res;
     }
 
     static float bandMag(float[][] cplx, int band, float scalar )
@@ -326,6 +357,13 @@ public class Fsk {
         float im = cplx[band][1];
         float mag = (float) (Math.sqrt(re*re+im*im) * scalar);
         return mag;
+    }
+    public int getFftSize() {
+        return fftSize;
+    }
+
+    public int getnBands() {
+        return nBands;
     }
 
 

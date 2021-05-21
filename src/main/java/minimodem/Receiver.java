@@ -1,10 +1,13 @@
 package minimodem;
 
+import minimodem.databits.IEncodeDecode;
 import minimodem.simpleaudio.SimpleAudio;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import static java.lang.Math.ceil;
+import static minimodem.databits.BitOps.bitReverse;
+import static minimodem.databits.BitOps.bitWindow;
 
 public class Receiver {
     private static final Logger fLogger = LogManager.getFormatterLogger("Receiver");
@@ -59,11 +62,12 @@ public class Receiver {
      private final int autodetectShift;
      private final boolean bfskInvertedFreqs;
      private final float fskConfidenceSearchLimit;
-    private final float fskConfidenceThreshold;
+     private final float fskConfidenceThreshold;
 
      private float nSamplesPerBit;
      private int expectNBits;
      private int nSamplesOverscan;
+     private int frameNSamples;
      private int samplebufSize;
      private float[] sampleBuf;
      private byte[] expectDataString;
@@ -147,7 +151,7 @@ public class Receiver {
         }
         fLogger.debug(("FRAME_OVERSCAN=%f nSamplesOverscan=%i"), FRAME_OVERSCAN, nSamplesOverscan);
 
-        int frameNSamples = (int)(nSamplesPerBit * bfskFrameNBits + 0.5f);
+        frameNSamples = (int)(nSamplesPerBit * bfskFrameNBits + 0.5f);
 
         if(expctDataString == null) {
             expectDataString = new byte[64];
@@ -167,7 +171,7 @@ public class Receiver {
 
     }
 
-    public int receive(boolean quietMode, boolean rxOne) {
+    public int receive(IEncodeDecode decoder, boolean quietMode, boolean rxOne) {
 
         int samplesNValid = 0;
         int ret = 0;
@@ -292,7 +296,7 @@ public class Receiver {
             long bits_U = 0;
             /* Note: frame_start_sample is actually the sample where the
              * prev_stop bit begins (since the "frame" includes the prev_stop). */
-            int frameStartSample_U = 0;
+            int frameStartSample = 0;
 
             int tryFirstSample_U;
             float tryConfidenceSearchLimit;
@@ -302,16 +306,18 @@ public class Receiver {
 
             boolean doRefineFrame = false;
 
-            confidence = fskp.fskFindFrame(sampleBuf,
+            Number[] resFF = fskp.fskFindFrame(sampleBuf,
                     expectNSamples,
                     tryFirstSample_U,
                     tryMaxNSamples,
                     tryStepNsamples,
                     tryConfidenceSearchLimit,
-                    carrier ? expectDataString : expectSyncString,
-                    bits_U,
-                    amplitude,
-                    frameStartSample_U);
+                    carrier ? expectDataString : expectSyncString);
+
+            confidence = (float) resFF[0];
+            bits_U = (long) resFF[1];
+            amplitude = (float) resFF[2];
+            frameStartSample = (int) resFF[3];
 
             if(confidence < peakConfidence * 0.75f) {
                 doRefineFrame = true;
@@ -377,15 +383,15 @@ public class Receiver {
                 }
 
                 carrier = true;
-                bfsk_databits_decode(0, 0, 0, 0); // reset the frame processor
+                decoder.decode(null, 0, 0, 0); // reset the frame processor
 
                 doRefineFrame = true;
-                debugLog(cs8(" ... do_refine_frame rescan (acquired carrier)\n"));
+                fLogger.debug(" ... do_refine_frame rescan (acquired carrier)");
             }
 
             if(doRefineFrame) {
                 if(confidence < Float.POSITIVE_INFINITY && tryStepNsamples > 1) {
-                    tryStepNsamples = Integer.divideUnsigned(tryMaxNsamples_U, FSK_ANALYZE_NSTEPS_FINE);
+                    tryStepNsamples = Integer.divideUnsigned(tryMaxNSamples, FSK_ANALYZE_NSTEPS_FINE);
                     if(tryStepNsamples == 0) {
                         tryStepNsamples = 1;
                     }
@@ -410,7 +416,7 @@ public class Receiver {
                 if(confidence2 > confidence) {
                     bits_U = bits2_U;
                     amplitude = amplitude2;
-                    frameStartSample_U = frameStartSample2_U;
+                    frameStartSample = frameStartSample2_U;
                 }
 
             }
@@ -418,11 +424,15 @@ public class Receiver {
             if(peakConfidence < confidence) {
                 peakConfidence = confidence;
             }
-            debugLog(cs8("@ confidence=%.3f peak_conf=%.3f amplitude=%.3f track_amplitude=%.3f\n"), confidence, peakConfidence, amplitude, trackAmplitude);
+            fLogger.debug("@ confidence=%.3f peak_conf=%.3f amplitude=%.3f track_amplitude=%.3f",
+                    confidence,
+                    peakConfidence,
+                    amplitude,
+                    trackAmplitude);
 
             confidenceTotal += confidence;
             amplitudeTotal += amplitude;
-            nframesDecoded++;
+            nFramesDecoded++;
             noconfidence = 0;
 
             // Advance the sample stream forward past the junk before the
@@ -430,12 +440,16 @@ public class Receiver {
             // (see also NOTE about frame_n_bits and expect_n_bits)...
             // But actually advance just a bit less than that to allow
             // for tracking slightly fast signals, hence - nsamples_overscan.
-            advance = frameStartSample_U + frameNsamples - nsamplesOverscan_U;
+            advance = frameStartSample + frameNSamples - nSamplesOverscan;
 
-            debugLog(cs8("@ nsamples_per_bit=%.3f n_data_bits=%u  frame_start=%u advance=%u\n"), nsamplesPerBit, (MethodRef0<Integer>)ImplicitDeclarations::bfskNDataBits, frameStartSample_U, advance_U);
+            fLogger.debug("@ nsamples_per_bit=%.3f n_data_bits=%u  frame_start=%u advance=%u",
+                    nSamplesPerBit,
+                    bfskNDataBits,
+                    frameStartSample,
+                    advance);
 
             // chop off the prev_stop bit
-            if(bfskNstopbits != 0.0f) {
+            if(bfskNStopBits != 0.0f) {
                 bits_U = bits_U >>> 1;
             }
             /*
@@ -443,15 +457,19 @@ public class Receiver {
              * for final conversion to output data bytes.
              */
             // chop off framing bits
-            bits_U = bitWindow(bits_U, (MethodRef0<Integer>)ImplicitDeclarations::bfskNstartbits, (MethodRef0<Integer>)ImplicitDeclarations::bfskNDataBits);
+            bits_U = bitWindow(bits_U, bfskNStartBits, bfskNDataBits);
             if(bfskMsbFirst) {
-                bits_U = bitReverse(bits_U, (MethodRef0<Integer>)ImplicitDeclarations::bfskNDataBits);
+                bits_U = bitReverse(bits_U, bfskNDataBits);
             }
-            debugLog(cs8("Input: %08x%08x - Databits: %u - Shift: %i\n"), (int)(bits_U >>> 32), (int)bits_U, (MethodRef0<Integer>)ImplicitDeclarations::bfskNDataBits, (MethodRef0<Integer>)ImplicitDeclarations::bfskNstartbits);
+            fLogger.debug("Input: %08x%08x - Databits: %u - Shift: %i",
+                    (int)(bits_U >>> 32),
+                    (int)bits_U,
+                    bfskNDataBits,
+                    bfskNStartBits);
 
             int dataoutSize_U = 4_096;
             byte[] dataoutbuf = new byte[4_096];
-            boolean dataoutNbytes_U = false;
+            int dataoutNbytes_U = 0;
 
             // suppress printing of bfsk_sync_byte bytes
             if(bfskDoRxSync) {
@@ -459,7 +477,7 @@ public class Receiver {
                     continue;
                 }
             }
-            dataoutNbytes_U += bfskDatabitsDecode(dataoutbuf.shift(dataoutNbytes_U), dataoutSize_U - dataoutNbytes_U, bits_U, bfskNDataBits);
+            dataoutNbytes_U += decoder.decode(dataoutbuf.shift(dataoutNbytes_U), dataoutSize_U - dataoutNbytes_U, bits_U, bfskNDataBits);
 
             if(dataoutNbytes_U == 0) {
                 continue;
@@ -482,13 +500,25 @@ public class Receiver {
             }
             if(carrier) {
                 if(!quietMode) {
-                    reportNoCarrier((MethodRef0<Integer>)ImplicitDeclarations::fskp, (MethodRef0<Integer>)ImplicitDeclarations::sampleRate, bfskDataRate, (MethodRef0<Integer>)ImplicitDeclarations::frameNBits, nframesDecoded, carrierNsamples, confidenceTotal, amplitudeTotal);
+                    reportNoCarrier(sampleRate,
+                            bfskDataRate,
+                            frameNBits,
+                            nFramesDecoded,
+                            carrierNSamples,
+                            confidenceTotal,
+                            amplitudeTotal);
                 }
             }
         }
         return ret;
     }
-    private static void reportNoCarrier(int sampleRate_U, float bfskDataRate, float frameNBits, int nframesDecoded_U, long carrierNsamples_U, float confidenceTotal, float amplitudeTotal) {
+    private static void reportNoCarrier(int sampleRate_U,
+                                        float bfskDataRate,
+                                        float frameNBits,
+                                        int nframesDecoded_U,
+                                        long carrierNsamples_U,
+                                        float confidenceTotal,
+                                        float amplitudeTotal) {
         float nbitsDecoded = Integer.toUnsignedLong(nframesDecoded_U) * frameNBits;
         float throughputRate = nbitsDecoded * Integer.toUnsignedLong(sampleRate_U) / Float.parseFloat(Long.toUnsignedString(carrierNsamples_U));
         System.err.printf("\n### NOCARRIER ndata=%s confidence=%.3f ampl=%.3f bps=%.2f", Integer.toUnsignedString(nframesDecoded_U), (double)(confidenceTotal / Integer.toUnsignedLong(nframesDecoded_U)), (double)(amplitudeTotal / Integer.toUnsignedLong(nframesDecoded_U)), (double)throughputRate);
@@ -496,7 +526,10 @@ public class Receiver {
             System.err.println(" (rate perfect) ###");
         } else {
             float throughputSkew = (throughputRate - bfskDataRate) / bfskDataRate;
-            System.err.printf(" (%.1f%% %s) ###\n", (double)(Math.abs(throughputSkew) * 100.0f), (((long)FLOAT_SIZE) == ((long)FLOAT_SIZE) ? signbitf(throughputSkew) : ((long)FLOAT_SIZE) == ((long)DOUBLE_SIZE) ? signbit(throughputSkew) : signbitl(throughputSkew)) != 0 ? cs8("slow") : cs8("fast"));
+            System.err.printf(" (%.1f%% %s) ###\n",
+                    (float)(Math.abs(throughputSkew) * 100.0f),
+                    (((long)FLOAT_SIZE) == ((long)FLOAT_SIZE) ? signbitf(throughputSkew) :
+                            ((long)FLOAT_SIZE) == ((long)DOUBLE_SIZE) ? signbit(throughputSkew) : signbitl(throughputSkew)) != 0 ? cs8("slow") : cs8("fast"));
         }
     }
     // example expect_bits_string
