@@ -329,8 +329,7 @@ public class Receiver {
                     carrierBand = -1;
                     if (carrier) {
                         if (!quietMode) {
-                            reportNoCarrier(fskp,
-                                    sampleRate,
+                            reportNoCarrier(sampleRate,
                                     bfskDataRate,
                                     bfskFrameNBits,
                                     nFramesDecoded,
@@ -519,7 +518,7 @@ public class Receiver {
 
     protected int buildExpectBitsString(byte[] expectBitsString,
                                         int useExpectBits,
-                                        long expectBits_U) {
+                                        long expectBits) {
         byte startBitValue = (byte)(invertStartStop ? '1' : '0');
         byte stopBitValue = (byte)(invertStartStop ? '0' : '1');
         int j = 0;
@@ -532,7 +531,7 @@ public class Receiver {
         }
         for(int i = 0; i < bfskNDataBits; i++, j++) {
             if(useExpectBits != 0) {
-                expectBitsString[j] = (byte)((expectBits_U >>> i & 1) + '0');
+                expectBitsString[j] = (byte)((expectBits >>> i & 1) + '0');
             } else {
                 expectBitsString[j] = 'd';
             }
