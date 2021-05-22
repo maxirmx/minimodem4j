@@ -1,9 +1,15 @@
-package minimodem;
+/**
+ * minimodem4j
+ * Fsk.java
+ * Created from fsk.c, fsk.h @ https://github.com/kamalmostafa/minimodem
+ */
+package minimodem.fsk;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jtransforms.fft.FloatFFT_1D;
 
-import java.util.Arrays;
+import java.nio.FloatBuffer;
 
 public class Fsk {
     private static final Logger fLogger = LogManager.getFormatterLogger("Fsk");
@@ -19,26 +25,21 @@ public class Fsk {
     private final int  nBands;
 
     private final float sampleRate;
-    private float fMark;
-    private float fSpace;
-    private float filterBw;
 
     private int	  fftSize;
     private int   bMark;
     private int   bSpace;
-///	fftwf_plan	fftplan; https://www.nayuki.io/res/free-small-fft-in-multiple-languages/Fft.java
+
+
 
     public Fsk(float sampleRate, float fMark, float fSpace, float filterBw) {
         this.sampleRate = sampleRate;
-        this.fMark = fMark;
-        this.fSpace = fSpace;
-        this.filterBw = filterBw;
-        
+
         this.bandWidth = filterBw;
 
         float fftHalfBw = bandWidth / 2.0f;
         fftSize = (int)((sampleRate + fftHalfBw) / bandWidth);
-        nBands = fftSize;
+        nBands = fftSize/2 + 1;
 
         bMark = (int)((fMark + fftHalfBw) / bandWidth);
         bSpace = (int)((fSpace + fftHalfBw) / bandWidth);
@@ -46,7 +47,8 @@ public class Fsk {
             fLogger.error("b_mark=%d or b_space=%d  is invalid (nbands=%d)", bMark, bSpace, nBands);
             return;
         }
-        fLogger.debug("### b_mark=%u b_space=%u fftsize=%d", bMark, bSpace, fftSize);
+        fLogger.debug("### b_mark=%d b_space=%d fftsize=%d", bMark, bSpace, fftSize);
+
     }
 
     public void fskSetTonesByBandshift(int bMark, int bShift) {
@@ -59,28 +61,30 @@ public class Fsk {
 
         this.bMark = bMark;
         this.bSpace = bSpace;
-        this.fMark = bMark * this.bandWidth;
-        this.fSpace = bSpace * this.bandWidth;
     }
 
     /**
      * Carrier detector
-     * @param samples            Array of samples
+     * @param sampleBuf          Sample buffer
+     * @param nSamples           Position of the first sample to analyze
      * @param nSamples           Number of samples to analyze
      * @param minMagThreshold    Carrier threshold
      * @return    Carrier band or -1 if no carrier was detected
      */
-    public int fskDetectCarrier(float[] samples, int nSamples, float minMagThreshold) {
+    public int fskDetectCarrier(FloatBuffer sampleBuf, int pSamples, int nSamples, float minMagThreshold) {
 //        int paNChannels = 1; // FIXME
-        float[] fftin = samples;
-//        fftwfExecute(fskp[0].getFftplan());
-        float[][] fftout = new float[nSamples][2];
+        float[] fftre = new float[nSamples];
+        float[] fftim = new float[nSamples];
+        sampleBuf.position(pSamples);
+        sampleBuf.get(fftre, 0, nSamples);
+        Fft1D fft = new Fft1D();
+        fft.transform(fftre, fftim);
         float magScalar = 1.0f / nSamples / 2.0f;
         float maxMag = 0.0f;
         int maxMagBand = -1;
         int i = 1; /* start detection at the first non-DC band */
         for(; i < nBands; i++) {
-            float mag = bandMag(fftout, i, magScalar);
+            float mag = bandMag(fftim, i, magScalar);
             if(mag < minMagThreshold) {
                 continue;
             }
@@ -97,22 +101,33 @@ public class Fsk {
 
     /**
      * Bit analizer
-     * @param samples       Array of samples
+     * @param sampleBuf     Sample buffer
      * @param pSamples      Starting position to analyze
      * @param nSamples      Number of samples to analyze
      * @return  Number[3]   [0] -->  Bit value (1/0): integer
      *                      [1] -->  Signal magnitude: float
      *                      [2] -->  Noise magnitude:  float
      */
-    private Number[] fskBitAnalyze(float[] samples, int pSamples, int nSamples) {
+    private Number[] fskBitAnalyze(FloatBuffer sampleBuf, int pSamples, int nSamples) {
         Number[] res = new Number[3];
-        float[] fftin = Arrays.copyOfRange(samples, pSamples, pSamples+nSamples);
-        float[][] fftout = new float[nSamples][2];
+    /*    float[] fftre = new float[nSamples];
+        float[] fftim = new float[nSamples];
+        sampleBuf.position(pSamples);
+        sampleBuf.get(fftre, 0, nSamples);
+        Fft1D fft = new Fft1D();
+        fft.transform(fftre, fftim);
+*/
+        float[] fftre = new float[fftSize*2];
+        sampleBuf.position(pSamples);
+        sampleBuf.get(fftre, 0, nSamples);
+        FloatFFT_1D fft = new FloatFFT_1D(fftSize);
+        fft.realForwardFull(fftre);
+
+
 
         float magScalar = 2.0f / nSamples;
-//        fftwf_execute(fskp->fftplan);
-        float magMark = bandMag(fftout, bMark, magScalar);
-        float magSpace = bandMag(fftout, bSpace, magScalar);
+        float magMark = bandMag(fftre, bMark, magScalar);
+        float magSpace = bandMag(fftre, bSpace, magScalar);
         // mark==1, space==0
         if(magMark > magSpace) {
             res[0] = 1;                 // bitOutp
@@ -123,7 +138,7 @@ public class Fsk {
             res[1] = magSpace;          // bitNoiseMagOutp
             res[2] = magMark;           // bitSignalMagOutp
         }
-        fLogger.debug("\t%.2f  %.2f  %s  bit=%u sig=%.2f noise=%.2f", magMark, magSpace,
+        fLogger.debug("\t%.2f  %.2f  %s  bit=%d sig=%.2f noise=%.2f", magMark, magSpace,
                 magMark > magSpace ? "mark      ":"     space",
                 res[0], res[1], res[2]);
 
@@ -133,7 +148,7 @@ public class Fsk {
     /**
      * returns confidence value [0.0 to INFINITY]
      */
-    private Number[] fskFrameAnalyze(float[] samples,
+    private Number[] fskFrameAnalyze(FloatBuffer sampleBuf,
                                      int pSamples,
                                      float samplesPerBit,
                                      int nBits,
@@ -151,24 +166,23 @@ public class Fsk {
         float[] bitNoiseMags = new float[64];
         int bitBeginSample;
         int bitnum;
-        byte[] expectBits = expectBitsString;
 
         /* pass #1 - process and check only the "required" (1/0) expect_bits */
         for(bitnum = 0; bitnum < nBits; bitnum++) {
-            if (expectBits[bitnum] == 'd') {
+            if (expectBitsString[bitnum] == 'd') {
                 continue;
             }
-            assert expectBits[bitnum] == '1' || expectBits[bitnum] == '0';
+            assert expectBitsString[bitnum] == '1' || expectBitsString[bitnum] == '0';
 
             bitBeginSample = pSamples + (int) (samplesPerBit * bitnum + 0.5f);
             fLogger.debug(" bit# %2d @ %7d: ", bitnum, bitBeginSample);
 
-            Number[] baRes = fskBitAnalyze(samples,bitBeginSample, bitNSamples);
+            Number[] baRes = fskBitAnalyze(sampleBuf,bitBeginSample, bitNSamples);
             bitValues[bitnum] = (int) baRes[0];
             bitSigMags[bitnum] = (float) baRes[1];
             bitNoiseMags[bitnum] = (float) baRes[2];
 
-            if (expectBits[bitnum] - '0' != bitValues[bitnum]) {
+            if (expectBitsString[bitnum] - '0' != bitValues[bitnum]) {
                 return res; /* does not match expected; abort frame analysis. */
             }
 
@@ -184,12 +198,12 @@ public class Fsk {
         }
         /* pass #2 - process only the dontcare ('d') expect_bits */
         for(bitnum = 0; bitnum < nBits; bitnum++) {
-            if(expectBits[bitnum] != 'd') {
+            if(expectBitsString[bitnum] != 'd') {
                 continue;
             }
             bitBeginSample = pSamples + (int)(samplesPerBit * bitnum + 0.5f);
             fLogger.debug(" bit# %2d @ %7d: ", bitnum, bitBeginSample);
-            Number[] resBA = fskBitAnalyze(samples, bitBeginSample, bitNSamples);
+            Number[] resBA = fskBitAnalyze(sampleBuf, bitBeginSample, bitNSamples);
             bitValues[bitnum] = (int) resBA[0];
             bitSigMags[bitnum] = (float) resBA[1];
             bitNoiseMags[bitnum] = (float) resBA[2];
@@ -270,13 +284,13 @@ public class Fsk {
         return res;
     }
 
-    public Number[] fskFindFrame(float[] samples,
-                                     int frameNsamples_U,
-                                     int tryFirstSample_U,
-                                     int tryMaxNsamples_U,
-                                     int tryStepNsamples_U,
-                                     float tryConfidenceSearchLimit,
-                                     byte[] expectBitsString) {
+    public Number[] fskFindFrame(FloatBuffer sampleBuf,
+                                 int frameNsamples_U,
+                                 int tryFirstSample_U,
+                                 int tryMaxNsamples_U,
+                                 int tryStepNsamples,
+                                 float tryConfidenceSearchLimit,
+                                 byte[] expectBitsString) {
 
         Number[] res = new Number[4];
         // Initialize with failure return values
@@ -285,10 +299,13 @@ public class Fsk {
         res[2] = 0.0f;              // amplOutp;
         res[3] = 0;                 // frameStartOutp;
 
-        int expectNBits = expectBitsString.length;
+        int expectNBits = 0;
+        while (expectBitsString[expectNBits]!=0 && expectNBits<64) {
+            expectNBits++;
+        }
         assert expectNBits <= 64; // protect fsk_frame_analyze()
         float samplesPerBit = frameNsamples_U / expectNBits;
-        // try_step_nsamples = 1;	// pedantic TEST
+        // tryStepNsamples = 1;	// pedantic TEST
         int bestT_U = 0;
         float bestC = 0.0f, bestA = 0.0f;
         long bestBits_U = 0;
@@ -297,7 +314,7 @@ public class Fsk {
         // and so on, until we've scanned the whole try_max_nsamples range.
         for (int j = 0; ; j++) {
             int up = j % 2 != 0 ? 1 : -1;
-            int t = tryFirstSample_U + up * ((j + 1) / 2) * tryStepNsamples_U;
+            int t = tryFirstSample_U + up * ((j + 1) / 2) * tryStepNsamples;
             if (t >= tryMaxNsamples_U) {
                 break;
             }
@@ -306,7 +323,7 @@ public class Fsk {
             }
 
             fLogger.debug("try fsk_frame_analyze at t=%d", t);
-            Number[] resFA = fskFrameAnalyze(samples, t, samplesPerBit, expectNBits, expectBitsString);
+            Number[] resFA = fskFrameAnalyze(sampleBuf, t, samplesPerBit, expectNBits, expectBitsString);
             float c = (float) resFA[0];
             long bitsOut_U = (long) resFA[1];
             float amplOut = (float) resFA[2];
@@ -338,7 +355,7 @@ public class Fsk {
         frm.append("' datum=").
                     append((Character.isISOControl(byteChar) || Character.isSpaceChar(byteChar)) ? '.' : byteChar).
                     append("'");
-        fLogger.debug("%s (0x%02x)   c=%f  a=%f  t=%u", frm.toString(), byteChar, bestC, bestA, bestT_U);
+        fLogger.debug("%s (0x%02x)   c=%f  a=%f  t=%d", frm.toString(), byteChar, bestC, bestA, bestT_U);
 
         res[0] = bestC;
         res[1] = bestBits_U;
@@ -348,10 +365,10 @@ public class Fsk {
         return res;
     }
 
-    static float bandMag(float[][] cplx, int band, float scalar )
+    static float bandMag(float[] cplr, int band, float scalar )
     {
-        float re = cplx[band][0];
-        float im = cplx[band][1];
+        float re = cplr[2*band];
+        float im = cplr[2*band+1];
         float mag = (float) (Math.sqrt(re*re+im*im) * scalar);
         return mag;
     }

@@ -67,14 +67,20 @@ public class SaAudioFile extends SimpleAudio {
             try {
                 fTmpOut = File.createTempFile("minimodem-", ".tmp");
                 fTmpChannel = new FileOutputStream(fTmpOut, false).getChannel();
-            } catch (IOException ex) {
-                fLogger.error("Failed to create temporary buffer file '%s'", fTmpOut.getPath());
+            } catch (IOException e) {
+                fLogger.error("Failed to create temporary buffer file '%s': [%s]", fTmpOut.getPath(), e.getMessage());
                 clean();
                 return false;
             }
         } else {
             try {
                 sIn = AudioSystem.getAudioInputStream(f);
+ /*               if (!sIn.getFormat().getEncoding().equals(enc)) {
+                    fLogger.error("Failed to open audio file '%s' due to encoding mismatch: actual '%s', requested: '%s'",
+                            f.getPath(), sIn.getFormat().getEncoding().toString(), enc.toString());
+                    clean();
+                    return false;
+                } */
                 bytesPerFrame = sIn.getFormat().getFrameSize();
                 if (bytesPerFrame == AudioSystem.NOT_SPECIFIED) {
                     // some audio formats may have unspecified frame size
@@ -82,10 +88,10 @@ public class SaAudioFile extends SimpleAudio {
                     bytesPerFrame = 1;
                 }
             } catch (Exception e) {
-                fLogger.error("Failed to open audio file '%s'", f.getPath());
+                fLogger.error("Failed to open audio file '%s': [%s]", f.getPath(), e.getMessage());
+                clean();
                 return false;
             }
-
         }
         return true;
     }
@@ -99,8 +105,8 @@ public class SaAudioFile extends SimpleAudio {
                 AudioInputStream aStream = new AudioInputStream(fInStream, aFormat, fTmpOut.length() / getFramesize());
                 AudioSystem.write(aStream, type, fOut);
                 fInStream.close();
-            } catch (Exception ex) {
-                fLogger.error("Failed to write output file '%s' [%s]", fOut.getPath(), ex.getLocalizedMessage());
+            } catch (Exception e) {
+                fLogger.error("Failed to write output file '%s': [%s]", fOut.getPath(), e.getMessage());
             }
         }
         clean();
@@ -108,38 +114,32 @@ public class SaAudioFile extends SimpleAudio {
 
     public int write(ByteBuffer byteBuf, int nFrames) {
         if (direction == SA_RECEIVE) {
-            fLogger.error("FCannot read from file '%s' which is open for playback", fOut.getPath());
+            fLogger.error("Cannot read from file '%s' which is open for playback", fOut.getPath());
             return 0;
         }
         int ret = 0;
         byteBuf.rewind();
         try {
             ret = fTmpChannel.write(byteBuf);
-        } catch (IOException ex) {
-            fLogger.error("Failed to write to temporary buffer file '%s'", fTmpOut.getPath());
+        } catch (IOException e) {
+            fLogger.error("Failed to write to temporary buffer file '%s': [%s]", fTmpOut.getPath(), e.getMessage());
         }
         return ret;
     }
 
     public int read(ByteBuffer byteBuf, int nFrames) {
-        int nBytes = 0;
+        int res=-1;
         if (direction == SA_TRANSMIT) {
             fLogger.error("Cannot read from file '%s' which is open for recording", fOut.getPath());
         } else {
-            int next=0;
-            while (nBytes/bytesPerFrame < nFrames && next !=-1) {
-                try {
-                    next = sIn.read();
-                } catch (IOException e) {
-                    next = -1;
-                }
-                if (next!=-1) {
-                    byteBuf.put((byte) next);
-                    nBytes++;
-                }
+            try {
+                res = sIn.read(byteBuf.array(), 0, nFrames*bytesPerFrame)/bytesPerFrame;
+            } catch (IOException e) {
+                fLogger.error("Cannot read from file '%s': [%s] ", fOut.getPath(), e.getMessage());
+                res = -1;
             }
         }
-        return nBytes;
+        return res;
     }
 
     protected boolean clean() {
@@ -150,8 +150,8 @@ public class SaAudioFile extends SimpleAudio {
             try {
                 fTmpChannel.close();
                 fTmpChannel = null;
-            } catch (IOException ex) {
-                fLogger.error("Failed to close temporary buffer file '%s'", fTmpOut.getPath());
+            } catch (IOException e) {
+                fLogger.error("Failed to close temporary buffer file '%s': [%s]", fTmpOut.getPath(), e.getMessage());
                 ret = false;
             }
         }
@@ -164,7 +164,7 @@ public class SaAudioFile extends SimpleAudio {
             try {
                 sIn.close();
             } catch (IOException e) {
-                fLogger.error("Failed to close input audio stream");
+                fLogger.error("Failed to close input audio stream: [%s]", e.getMessage());
                 ret = false;
             }
             sIn = null;

@@ -1,3 +1,10 @@
+/**
+ * minimodem4j
+ * SimpleAudio.java
+ * Transmitter implementation
+ * Created from minimodem.c @ https://github.com/kamalmostafa/minimodem
+ */
+
 package minimodem;
 
 import minimodem.databits.IEncodeDecode;
@@ -25,12 +32,16 @@ public class Transmitter {
     private final int bfskSyncByte;
 
     private int txTransmitting = 0;
-    public static int txLeaderBitsLen = 2;
-    public static int txTrailerBitsLen = 2;
-    public static float txBfskMarkF;
+    public int txLeaderBitsLen = 2;
+    public  int txTrailerBitsLen = 2;
     private int txBitNsamples;
 
-
+    /**
+     * Transmitter
+     * @param saOut     Output device
+     * @param saTone    Tone generator (modulator)
+     * @param modem     Minimodem instance to inherit configuration from
+     */
     public Transmitter(SimpleAudio saOut,
                        SaToneGenerator saTone,
                        Minimodem modem) {
@@ -51,34 +62,11 @@ public class Transmitter {
     }
 
     /**
-     * rudimentary BFSK transmitter
+     * Transmits (bytes from) stdin using IEncodeDecode interface provided
+     * @param encoder
      */
-    private void fskTransmitFrame(int bits, int nDataBits, int bitNsamples, float bfskMarkF, float bfskSpaceF,
-                                  float bfskNstartbits, float bfskNstopbits, boolean invertStartStop, boolean bfskMsbFirst) {
-        int i;
-        if(bfskNstartbits > 0) {
-            txToneGenerator.Tone(txSaOut, invertStartStop ? bfskMarkF : bfskSpaceF, (int) (bitNsamples * bfskNstartbits));
-        }
-        for(i = 0; i<nDataBits; i++) {
-            // data
-            int bit_U;
-            if(bfskMsbFirst) {
-                bit_U = bits >>> nDataBits - i - 1 & 1;
-            } else {
-                bit_U = bits >>> i & 1;
-            }
-
-            float toneFreq = bit_U == 1 ? bfskMarkF : bfskSpaceF;
-            txToneGenerator.Tone(txSaOut, toneFreq, bitNsamples);
-        }
-        if(bfskNstopbits > 0) {
-            txToneGenerator.Tone(txSaOut, invertStartStop ? bfskSpaceF : bfskMarkF, (int) (bitNsamples * bfskNstopbits)); // stop
-        }
-    }
-
     public void fskTransmitStdin(IEncodeDecode encoder)
     {
-        txBfskMarkF = bfskMarkF;
         txBitNsamples = (int) (txSaOut.getRate() / bfskDataRate + 0.5f);
 
         boolean endOfFile = false;
@@ -101,14 +89,12 @@ public class Transmitter {
                          txTransmitting = 2;
                          /* emit "preamble" of sync bytes */
                          for (j = 0; j < bfskDoTxSyncBytes; j++) {
-                             fskTransmitFrame(bfskSyncByte, nDataBits, txBitNsamples, bfskMarkF, bfskSpaceF,
-                                     bfskNStartBits, bfskNStopBits, invertStartStop, bfskMsbFirst);
+                             fskTransmitFrame(bfskSyncByte);
                          }
                      }
                      /* emit data bits */
                      for(j = 0; j<nwords; j++) {
-                         fskTransmitFrame(bits[j], nDataBits, txBitNsamples, bfskMarkF, bfskSpaceF, bfskNStartBits,
-                                 bfskNStopBits, invertStartStop, bfskMsbFirst);
+                         fskTransmitFrame(bits[j]);
                      }
                  }
                  else {
@@ -123,11 +109,44 @@ public class Transmitter {
         }
     }
 
+    /**
+     * Rudimentary BFSK transmitter
+     * @param bits      data to transmit
+     */
+    private void fskTransmitFrame(int bits) {
+        int i;
+        if(bfskNStartBits > 0) {
+            txToneGenerator.Tone(txSaOut,
+                    invertStartStop ? bfskMarkF : bfskSpaceF,
+                    (int) (txBitNsamples * bfskNStartBits));
+        }
+        for(i = 0; i<nDataBits; i++) {
+            // data
+            int bit;
+            if(bfskMsbFirst) {
+                bit = bits >>> nDataBits - i - 1 & 1;
+            } else {
+                bit = bits >>> i & 1;
+            }
+
+            float toneFreq = bit == 1 ? bfskMarkF : bfskSpaceF;
+            txToneGenerator.Tone(txSaOut, toneFreq, txBitNsamples);
+        }
+        if(bfskNStopBits > 0) {
+            txToneGenerator.Tone(txSaOut,
+                    invertStartStop ? bfskSpaceF : bfskMarkF,
+                    (int) (txBitNsamples * bfskNStopBits)); // stop
+        }
+    }
+
+    /**
+     * Stop Transmit Handler
+     * Emits trailing bits if specified
+     */
     private void txStopTransmitHandler() {
         for(int j = 0; j < txTrailerBitsLen; j++) {
-            txToneGenerator.Tone(txSaOut, txBfskMarkF, txBitNsamples);
+            txToneGenerator.Tone(txSaOut, bfskMarkF, txBitNsamples);
         }
-
         txTransmitting = 0;
         if(txPrintEot) {
             fLogger.info("### EOT");

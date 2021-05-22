@@ -196,13 +196,12 @@ class Minimodem implements Callable<Integer> {
 		if (cfgRc != 0) {
 			return cfgRc;
 		}
-		return (txMode.equals(SA_RECEIVE))?transmit():receive();
+		return (txMode.equals(SA_TRANSMIT))?transmit():receive();
 	}
 
 	protected int transmit() {
 		SaToneGenerator toneGenerator = new SaToneGenerator();
 		toneGenerator.toneInit(txSinTableLen, txAmplitude);
-		fLogger.info("Tone Generator is ready");
 
 		SaAudioFile saOut = new SaAudioFile();
 		if (!saOut.open(file,
@@ -213,8 +212,6 @@ class Minimodem implements Callable<Integer> {
 				bfskMsbFirst)) {
 			return -1;
 		}
-
-		fLogger.info("Audio file is ready");
 
 		fLogger.info("Transmitting ...");
 		Transmitter tx = new Transmitter(saOut,
@@ -238,7 +235,6 @@ class Minimodem implements Callable<Integer> {
 			return -1;
 		}
 		saIn.setRxNoise(rxNoiseFactor);
-		fLogger.info("Audio file is ready");
 
 		Receiver rx = new Receiver(saIn,this);
 
@@ -255,9 +251,10 @@ class Minimodem implements Callable<Integer> {
 	 */
 	protected int configure() {
 		if (opMode != null && opMode.oTx) {
-			txMode = SA_RECEIVE;
-		} else {
 			txMode = SA_TRANSMIT;
+		} else {
+			txMode = SA_RECEIVE;
+			floatSamples = true;
 		}
 		if (dataBits != null) {
 			if (dataBits.ascii8N1) {                    // ASCII 8-N-1
@@ -446,9 +443,7 @@ class Minimodem implements Callable<Integer> {
 		return bfskNStopBits;
 	}
 
-	public int getBfskNDataBits() {
-		return bfskNDataBits;
-	}
+	public int getBfskNDataBits() { return bfskNDataBits; }
 
 	public int getBfskFrameNBits() {
 		return bfskFrameNBits;
@@ -509,8 +504,5 @@ class Minimodem implements Callable<Integer> {
 	public boolean isTxPrintEot() {
 		return txPrintEot;
 	}
-
-
-
 
 }

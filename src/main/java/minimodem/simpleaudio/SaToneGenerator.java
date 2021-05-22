@@ -9,13 +9,15 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
+import java.nio.ShortBuffer;
 
+import static java.nio.ByteOrder.nativeOrder;
 import static javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT;
 import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
 
 public class SaToneGenerator {
     private static final Logger fLogger = LogManager.getFormatterLogger(SaToneGenerator.class);
-
     /**
      * Precompiled sine table(s)
      * sinTableFloat  -- as floats (-1.0 to 1.0)
@@ -118,6 +120,9 @@ public class SaToneGenerator {
     public void Tone(SimpleAudio saOut, float toneFreq, int nsamplesDur) {
         int framesize = saOut.getFramesize();
         ByteBuffer byteBuf = ByteBuffer.allocateDirect(nsamplesDur * framesize);
+        byteBuf.order(nativeOrder());           // Here it shall be native order. Lsb/Msb is handled in the code.
+        FloatBuffer floatBuf = byteBuf.asFloatBuffer();
+        ShortBuffer shortBuf = byteBuf.asShortBuffer();
         int i;
 
         if (toneFreq != 0) {
@@ -125,21 +130,21 @@ public class SaToneGenerator {
             if (saOut.getEncoding().equals(PCM_FLOAT)) {
                 if (sinTableFloat != null) {
                     for (i = 0; i < nsamplesDur; i++) {
-                        putFloat(byteBuf, sinLuFloat(sinePhaseTurns(i, waveNsamples)));
+                        floatBuf.put(sinLuFloat(sinePhaseTurns(i, waveNsamples)));
                     }
                 } else {
                     for (i = 0; i < nsamplesDur; i++) {
-                        putFloat(byteBuf, (float) (toneMagFloat * Math.sin(sinePhaseRadians(i, waveNsamples))));
+                        floatBuf.put((float) (toneMagFloat * Math.sin(sinePhaseRadians(i, waveNsamples))));
                     }
                 }
             } else if (saOut.getEncoding().equals(PCM_SIGNED)) {
                     if (sinTableShort != null) {
                         for (i = 0; i < nsamplesDur; i++) {
-                            putShort(byteBuf, sinLuShort(sinePhaseTurns(i, waveNsamples)));
+                            shortBuf.put(sinLuShort(sinePhaseTurns(i, waveNsamples)));
                         }
                     } else {
                         for (i = 0; i < nsamplesDur; i++) {
-                            putShort(byteBuf, lroundf((float) (toneMagShort * Math.sin(sinePhaseRadians(i, waveNsamples)))));
+                            shortBuf.put(lroundf((float) (toneMagShort * Math.sin(sinePhaseRadians(i, waveNsamples)))));
                         }
                     }
             } else {
@@ -152,30 +157,8 @@ public class SaToneGenerator {
             }
             saToneCphase = 0.0f;
         }
+
         saOut.write(byteBuf, nsamplesDur);
-    }
-
-    /**
-     * Puts short value to byte buffer. LSB first
-     * @param buf  buffer
-     * @param v value to put
-     */
-    private static void putShort(ByteBuffer buf, short v) {
-        buf.put((byte) v).
-           put((byte) (v >> 8));
-    }
-
-   /**
-    * Puts float value to byte buffer. LSB first
-    * @param buf  buffer
-    * @param v value to put
-    */
-    private static void putFloat(ByteBuffer buf, float v) {
-        int intBits =  Float.floatToIntBits(v);
-        buf.put((byte)  intBits).
-            put((byte) (intBits >> 8)).
-            put((byte) (intBits >> 16)).
-            put((byte) (intBits >> 24));
     }
 
     /**
