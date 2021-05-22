@@ -66,14 +66,13 @@ public class Fsk {
     /**
      * Carrier detector
      * @param samples            Array of samples
-     * @param pSamples           Starting position to analyze
      * @param nSamples           Number of samples to analyze
      * @param minMagThreshold    Carrier threshold
      * @return    Carrier band or -1 if no carrier was detected
      */
-    public int fskDetectCarrier(float[] samples, int pSamples, int nSamples, float minMagThreshold) {
+    public int fskDetectCarrier(float[] samples, int nSamples, float minMagThreshold) {
 //        int paNChannels = 1; // FIXME
-        float[] fftin = Arrays.copyOfRange(samples, pSamples, pSamples+nSamples);
+        float[] fftin = samples;
 //        fftwfExecute(fskp[0].getFftplan());
         float[][] fftout = new float[nSamples][2];
         float magScalar = 1.0f / nSamples / 2.0f;

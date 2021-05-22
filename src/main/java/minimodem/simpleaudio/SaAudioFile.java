@@ -24,6 +24,7 @@ public class SaAudioFile extends SimpleAudio {
     protected File fOut = null;
     protected FileChannel fTmpChannel = null;
     protected AudioInputStream sIn = null;
+    protected int bytesPerFrame = 1;
 
     /**
      * Opens file
@@ -74,6 +75,12 @@ public class SaAudioFile extends SimpleAudio {
         } else {
             try {
                 sIn = AudioSystem.getAudioInputStream(f);
+                bytesPerFrame = sIn.getFormat().getFrameSize();
+                if (bytesPerFrame == AudioSystem.NOT_SPECIFIED) {
+                    // some audio formats may have unspecified frame size
+                    // in that case we may read any amount of bytes
+                    bytesPerFrame = 1;
+                }
             } catch (Exception e) {
                 fLogger.error("Failed to open audio file '%s'", f.getPath());
                 return false;
@@ -115,10 +122,24 @@ public class SaAudioFile extends SimpleAudio {
     }
 
     public int read(ByteBuffer byteBuf, int nFrames) {
+        int nBytes = 0;
         if (direction == SA_TRANSMIT) {
-            fLogger.error("FCannot read from file '%s' which is open for recording", fOut.getPath());
+            fLogger.error("Cannot read from file '%s' which is open for recording", fOut.getPath());
+        } else {
+            int next=0;
+            while (nBytes/bytesPerFrame < nFrames && next !=-1) {
+                try {
+                    next = sIn.read();
+                } catch (IOException e) {
+                    next = -1;
+                }
+                if (next!=-1) {
+                    byteBuf.put((byte) next);
+                    nBytes++;
+                }
+            }
         }
-        return 0;
+        return nBytes;
     }
 
     protected boolean clean() {
@@ -138,8 +159,16 @@ public class SaAudioFile extends SimpleAudio {
             fTmpOut.delete();
             fTmpOut = null;
         }
+
+        if (sIn != null) {
+            try {
+                sIn.close();
+            } catch (IOException e) {
+                fLogger.error("Failed to close input audio stream");
+                ret = false;
+            }
+            sIn = null;
+        }
         return ret;
-
     }
-
 }

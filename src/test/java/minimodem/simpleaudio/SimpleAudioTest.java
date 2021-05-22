@@ -14,13 +14,19 @@ import org.junit.jupiter.api.Test;
 
 public class SimpleAudioTest {
     @Test
-    public void AfOpenTstWrongType(){
+    public void AfOpenTstWrongTypeW(){
         SaAudioFile f = new SaAudioFile();
         assert (!f.open(new File("some.file"), PCM_FLOAT, SA_TRANSMIT, 48000, 1, false));
     }
 
     @Test
-    public void AfOpenCleanTst(){
+    public void AfOpenTstNoFileR(){
+        SaAudioFile f = new SaAudioFile();
+        assert (!f.open(new File("some.file"), PCM_FLOAT, SA_RECEIVE, 48000, 1, false));
+    }
+
+    @Test
+    public void AfOpenCleanTstW(){
         SaAudioFile f = new SaAudioFile();
         assert (f.open(new File("some.wav"),PCM_FLOAT, SA_TRANSMIT,48000, 1, false));
         assert (f.fTmpOut != null);
@@ -28,6 +34,17 @@ public class SimpleAudioTest {
         assert (f.clean());
         assert (f.fTmpOut == null);
         assert (f.fTmpChannel == null);
+    }
+
+    @Test
+    public void AfOpenCleanTstR(){
+        SaAudioFile f = new SaAudioFile();
+        assert (f.open(new File(this.getClass().getResource("/Test3/test_input.wav").getFile()),
+                PCM_FLOAT, SA_RECEIVE,48000, 1, false));
+        assert (f.sIn != null);
+        assert (f.clean());
+        assert (f.sIn == null);
+        f.close();
     }
 
     @Test

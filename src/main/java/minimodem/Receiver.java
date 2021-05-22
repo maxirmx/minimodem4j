@@ -5,6 +5,8 @@ import minimodem.simpleaudio.SimpleAudio;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.nio.ByteBuffer;
+
 import static java.lang.Math.ceil;
 import static minimodem.databits.BitOps.bitReverse;
 import static minimodem.databits.BitOps.bitWindow;
@@ -70,7 +72,7 @@ public class Receiver {
      private int nSamplesOverscan;
      private int frameNSamples;
      private int samplebufSize;
-     private float[] sampleBuf;
+     private ByteBuffer sampleBuf;
      private byte[] expectDataString;
      private byte[] expectSyncString;
      private Fsk fskp;
@@ -125,7 +127,7 @@ public class Receiver {
             samplebufSize = sampleRate / SAMPLE_BUF_DIVISOR;
         }
         fLogger.debug("Created sample buffer with samplebufSize=%i", samplebufSize);
-        sampleBuf = new float[samplebufSize];
+        sampleBuf = ByteBuffer.allocate(samplebufSize*Float.BYTES);
 
         // Ensure that we overscan at least a single sample
         nSamplesOverscan = (int)(nSamplesPerBit * FRAME_OVERSCAN + 0.5f);
@@ -185,20 +187,17 @@ public class Receiver {
                 if (advance > samplesNValid) {
                     break;
                 }
-                System.arraycopy(sampleBuf,advance,sampleBuf,0, sampleBuf.length-advance);
+                sampleBuf = shift(sampleBuf, advance);
+//                System.arraycopy(sampleBuf,advance,sampleBuf,0, sampleBuf.length-advance);
                 samplesNValid -= advance;
             }
             if (samplesNValid < samplebufSize / 2) {
-                float[] samplesReadptr = sampleBuf;
-                int samplesReadptrIndex = (int) samplesNValid;
-                long readNsamples_U = samplebufSize / 2;
+                int readNsamples_U = samplebufSize / 2;
                 /* Read more samples into samplebuf (fill it) */
                 assert Long.compareUnsigned(readNsamples_U, 0) > 0;
                 assert Long.compareUnsigned(samplesNValid + readNsamples_U, samplebufSize) <= 0;
-                long r=0;
-               // >>>>> r = sa.read()
-              //  r = simpleaudioRead((MethodRef0<Integer>) ImplicitDeclarations::sa, (MethodRef0<Integer>) ImplicitDeclarations::samplesReadptr, readNsamples_U);
-              //  debugLog(cs8("simpleaudio_read(samplebuf+%td, n=%zu) returns %zd\n"), nnc(sampleBuf).shift((int) dataAddress(-(MethodRef0<Integer>) ImplicitDeclarations::samplesReadptr)), readNsamples_U, r);
+                long r = rxSaIn.read(sampleBuf,readNsamples_U);
+                fLogger.debug("simpleaudio_read reading %d returns %d", readNsamples_U, r);
                 if (r < 0) {
                     fLogger.error("Simpleaudio read error");
                     ret = -1;
@@ -219,7 +218,7 @@ public class Receiver {
                     nSamplesPerScan = fskp.getFftSize();
                 }
                 for (i = 0; i + nSamplesPerScan <= samplesNValid; i = (int) (i + nSamplesPerScan)) {
-					carrierBand = fskp.fskDetectCarrier(sampleBuf, i, (int) nSamplesPerScan, carrierAutodetectThreshold);
+					carrierBand = fskp.fskDetectCarrier(shift(sampleBuf,i).asFloatBuffer().array(), (int) nSamplesPerScan, carrierAutodetectThreshold);
                     if (carrierBand >= 0) {
                         break;
                     }
@@ -289,7 +288,7 @@ public class Receiver {
 
             boolean doRefineFrame = false;
 
-            Number[] resFF = fskp.fskFindFrame(sampleBuf,
+            Number[] resFF = fskp.fskFindFrame(sampleBuf.asFloatBuffer().array(),
                     expectNSamples,
                     tryFirstSample_U,
                     tryMaxNSamples,
@@ -379,7 +378,8 @@ public class Receiver {
                     tryConfidenceSearchLimit = Float.POSITIVE_INFINITY;
                 }
 
-                resFF = fskp.fskFindFrame(sampleBuf, expectNSamples,
+                resFF = fskp.fskFindFrame(sampleBuf.asFloatBuffer().array(),
+                        expectNSamples,
                         tryFirstSample_U,
                         tryMaxNSamples,
                         tryStepNsamples,
@@ -565,4 +565,9 @@ public class Receiver {
         return j;
     }
 
+    static private ByteBuffer shift(ByteBuffer b, int p) {
+        b.position(p);
+        ByteBuffer r = ByteBuffer.allocate(b.capacity());
+        return r.put(b.slice());
+    }
 }
