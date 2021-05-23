@@ -1,14 +1,10 @@
 package minimodem;
-import minimodem.simpleaudio.SaAudioFile;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 
-import static javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT;
-import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
-import static minimodem.simpleaudio.SaDirection.SA_RECEIVE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class DemodTest {
@@ -60,22 +56,7 @@ public class DemodTest {
         System.setIn(in);
     }
 
-    @Test
-    public void rxDemodTest1() {
-        genTestDataF("tmp.wav", "a");
-        Minimodem modem = setupRxModem("tmp.wav");
-        assert (modem.configure()==0);
-        PrintStream originalOut = System.out;
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(outContent));
-        modem.receive();
-        assertEquals("a", outContent.toString());
-        System.setOut(originalOut);
-    }
-
-    @Test
-    public void rxDemodTest2() {
-        String td = "12345 vyshel zaychik pogulyat";
+    private void runTest(String td){
         genTestDataF("tmp.wav", td);
         Minimodem modem = setupRxModem("tmp.wav");
         assert (modem.configure()==0);
@@ -83,23 +64,27 @@ public class DemodTest {
         ByteArrayOutputStream outContent = new ByteArrayOutputStream();
         System.setOut(new PrintStream(outContent));
         modem.receive();
-        assertEquals(td,outContent.toString());
+        assertEquals(td, outContent.toString());
         System.setOut(originalOut);
     }
 
     @Test
-    public void rxDemodTestM() {
-        String td = "Z";
-        genTestDataS("tmp.wav", td);
-        Minimodem modem = setupRxModem("tmp.wav");
-        assert (modem.configure()==0);
-        PrintStream originalOut = System.out;
-        ByteArrayOutputStream outContent = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(outContent));
-        modem.receive();
-        assertEquals(td,outContent.toString());
-        System.setOut(originalOut);
+    public void rxDemodTest1() {
+        runTest("a");
     }
 
+    @Test
+    public void rxDemodTest2() {
+        runTest("12345 vyshel zaychik pogulyat");
+    }
+
+    @Test
+    public void rxDemodTestN() {
+        runTest("12345 вышел зайчик погулять");
+    }
+    @Test
+    public void rxDemodTestM() {
+        runTest("’");
+    }
 
 }

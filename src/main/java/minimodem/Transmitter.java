@@ -1,8 +1,8 @@
-/**
- * minimodem4j
- * SimpleAudio.java
- * Transmitter implementation
- * Created from minimodem.c @ https://github.com/kamalmostafa/minimodem
+/*
+  minimodem4j
+  SimpleAudio.java
+  Transmitter implementation
+  Created from minimodem.c @ https://github.com/kamalmostafa/minimodem
  */
 
 package minimodem;

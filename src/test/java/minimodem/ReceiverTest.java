@@ -1,6 +1,5 @@
 package minimodem;
 import minimodem.simpleaudio.SaAudioFile;
-import minimodem.simpleaudio.SimpleAudio;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
@@ -52,13 +51,13 @@ public class ReceiverTest {
         System.setIn(in);
     }
 
-    private Receiver setupReceiever(String fnIn, Minimodem modem) {
+    private Receiver setupReceiver(String fnIn, Minimodem modem) {
         SaAudioFile saIn = new SaAudioFile();
         assert saIn.open(new File(fnIn),
                 modem.floatSamples?PCM_FLOAT:PCM_SIGNED,
                 SA_RECEIVE,
                 modem.sampleRate,
-                modem.nChannels,
+                Minimodem.nChannels,
                 modem.bfskMsbFirst);
         Receiver r = new Receiver(saIn, modem);
         return r;
@@ -69,10 +68,10 @@ public class ReceiverTest {
         genTestData("tmp.wav", "a");
         Minimodem modem = setupRxModem("tmp.wav");
         assert (modem.configure()==0);
-        Receiver rx = setupReceiever("tmp.wav", modem);
+        Receiver rx = setupReceiver("tmp.wav", modem);
         rx.configure(null);
         assert rx.nSamplesOverscan == 80;
-        assert rx.byteArray2String(rx.expectDataString).equals("10dddddddd1\\0");
+        assert Receiver.byteArray2String(rx.expectDataString).equals("10dddddddd1\\0");
     }
 
     @Test
@@ -80,7 +79,7 @@ public class ReceiverTest {
         genTestData("tmp.wav", "a");
         Minimodem modem = setupRxModem("tmp.wav");
         assert (modem.configure()==0);
-        Receiver rx = setupReceiever("tmp.wav", modem);
+        Receiver rx = setupReceiver("tmp.wav", modem);
         rx.configure(null);
         rx.refillBuf();
         assert rx.samplesNValid == 2000;
@@ -94,7 +93,7 @@ public class ReceiverTest {
         genTestData("tmp.wav", "a");
         Minimodem modem = setupRxModem("tmp.wav");
         assert (modem.configure()==0);
-        Receiver rx = setupReceiever("tmp.wav", modem);
+        Receiver rx = setupReceiver("tmp.wav", modem);
         rx.configure(null);
         rx.refillBuf();
         assert rx.samplesNValid == 2000;

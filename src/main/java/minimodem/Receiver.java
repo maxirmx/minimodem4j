@@ -408,10 +408,10 @@ public class Receiver {
                 int dataoutNbytes = decoder.decode(dataoutbuf, DATAOUT_SIZE, bits, bfskNDataBits);
                 if(dataoutNbytes != 0) {
                     for(int p=0; dataoutNbytes != 0; p++, dataoutNbytes--) {
-                        char print = outputPrintFilter ?
-                                ((Character.isISOControl(dataoutbuf[p]) || Character.isSpaceChar(dataoutbuf[p])) ?  '.' : (char) dataoutbuf[p]) :
-                                (char) dataoutbuf[p];
-                        System.out.print(print);
+                        int print = outputPrintFilter ?
+                                ((Character.isISOControl(dataoutbuf[p]) || Character.isSpaceChar(dataoutbuf[p])) ?  '.' : dataoutbuf[p]) :
+                                dataoutbuf[p];
+                        System.out.write((byte)(print&0xFF));
                     }
                 }
             }
@@ -555,7 +555,7 @@ public class Receiver {
      *          if there is no trailing '\0'  '>>' will be added (looks abnormal)
      */
     protected static String byteArray2String(byte[] a) {
-        StringBuilder sb = new StringBuilder("");
+        StringBuilder sb = new StringBuilder();
         int i;
         for (i=0; i<a.length && a[i]!=0; i++) {
             sb.append((char)a[i]);

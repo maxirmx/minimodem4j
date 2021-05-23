@@ -5,6 +5,7 @@ import static javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT;
 import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
 import static minimodem.simpleaudio.SaDirection.*;
 import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,13 @@ public class SimpleAudioTest {
     @Test
     public void AfOpenCleanTstW(){
         SaAudioFile f = new SaAudioFile();
-        assert (f.open(new File("some.wav"),PCM_FLOAT, SA_TRANSMIT,48000, 1, false));
+        File fOut = null;
+        try {
+            fOut = File.createTempFile("minimodem-", ".wav");
+        } catch (IOException e) {
+            assert false;
+        }
+        assert (f.open(fOut,PCM_FLOAT, SA_TRANSMIT,48000, 1, false));
         assert (f.fTmpOut != null);
         assert (f.fTmpChannel != null);
         assert (f.clean());
@@ -51,7 +58,12 @@ public class SimpleAudioTest {
     @Test
     public void AfNaiveWRTst() {
         SaAudioFile f = new SaAudioFile();
-        File fOut = new File("some.wav");
+        File fOut = null;
+        try {
+            fOut = File.createTempFile("minimodem-", ".wav");
+        } catch (IOException e) {
+            assert false;
+        }
         fOut.deleteOnExit();
         assert (f.open(fOut, PCM_FLOAT, SA_TRANSMIT, 48000, 1, false));
         ByteBuffer buf = ByteBuffer.allocate(4);

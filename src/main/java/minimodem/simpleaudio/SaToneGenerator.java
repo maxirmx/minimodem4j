@@ -78,7 +78,7 @@ public class SaToneGenerator {
      * @param nsamplesDur   duration (the number of samples)
      */
     public void Tone(SimpleAudio saOut, float toneFreq, int nsamplesDur) {
-        int framesize = saOut.getFramesize();
+        int framesize = saOut.getFrameSize();
         ByteBuffer byteBuf = ByteBuffer.allocateDirect(nsamplesDur * framesize);
         byteBuf.order(nativeOrder());           // Here it shall be native order. Lsb/Msb is handled in the code.
         FloatBuffer floatBuf = byteBuf.asFloatBuffer();

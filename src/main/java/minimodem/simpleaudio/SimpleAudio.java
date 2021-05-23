@@ -48,7 +48,7 @@ public abstract class SimpleAudio {
      * Gets backend frame size
      * @return Backend frame size as specified by audio format or 0 if audio format os not set up
      */
-    public int getFramesize() {
+    public int getFrameSize() {
         if (aFormat == null) {
             return 0;
         } else {

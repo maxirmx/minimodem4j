@@ -7,9 +7,11 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="minimodem.samsonov.net" />
+        <module name="minimodem" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="minimodem" target="15" />
       <module name="minimodem.samsonov.net" target="15" />
     </bytecodeTargetLevel>
   </component>

@@ -11,14 +11,8 @@ public class CommandLineTest
     private Minimodem processCmdLine(String[] args) {
         Minimodem minimodem = new Minimodem();
         CommandLine cmd = new CommandLine (minimodem);
-        CommandLine.ParseResult parseResult = cmd.parseArgs(args);
+        cmd.parseArgs(args);
         return minimodem;
-    }
-
-// Are we alive ?
-    @Test
-    public void AliveTest() {
-        assert true;
     }
 
 // Autodetect carrier ("--auto-carrier") - set option forces assignment to carrierAutodetectThreshold

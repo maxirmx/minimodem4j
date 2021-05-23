@@ -14,17 +14,14 @@ public class ReceiverFunctionalTest {
         try (InputStream in1 = new BufferedInputStream(new FileInputStream(file1));
              InputStream in2 = new BufferedInputStream(new FileInputStream(file2));) {
             int value1, value2, i;
-            i=0;
             do {
                 //since we're buffered read() isn't expensive
                 value1 = in1.read();
                 value2 = in2.read();
-                i++;
                 if (value1 != value2) {
                     return false;
                 }
             } while (value1 >= 0);
-
             //since we already checked that the file sizes are equal
             //if we're here we reached the end of both files without a mismatch
             return true;
@@ -45,7 +42,7 @@ public class ReceiverFunctionalTest {
     private void runTest(File fIn, File fSample) {
         String fnOut = fIn.getParent() + "/tmp.txt";
         File fOut = new File(fnOut);
-    //    fOut.deleteOnExit();
+//        fOut.deleteOnExit();
         PrintStream originalOut = System.out;
         try {
             System.setOut(new PrintStream(new FileOutputStream(fOut)));
@@ -83,6 +80,13 @@ public class ReceiverFunctionalTest {
     public void Test4() {
         File fIn = new File(this.getClass().getResource("/Test4/test_input.wav").getFile());
         File fSample = new File(this.getClass().getResource("/Test4/test_output.txt").getFile());
+        runTest(fIn, fSample);
+    }
+
+    @Test
+    public void TestG() {
+        File fIn = new File(this.getClass().getResource("/Test5/gupshup_audio.wav").getFile());
+        File fSample = new File(this.getClass().getResource("/Test5/gupshup_audio.txt").getFile());
         runTest(fIn, fSample);
     }
 

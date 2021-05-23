@@ -14,7 +14,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.ShortBuffer;
 import java.nio.channels.FileChannel;
@@ -88,18 +87,10 @@ public class SaAudioFile extends SimpleAudio {
         } else {
             try {
                 sIn = AudioSystem.getAudioInputStream(f);
-                if (!sIn.getFormat().getEncoding().equals(enc)) {
-                    if(sIn.getFormat().getEncoding().equals(PCM_SIGNED) &&
-                        enc.equals(PCM_FLOAT)) {
+                aFormat = sIn.getFormat();
+                if (!getEncoding().equals(enc)) {
+                    if(getEncoding().equals(PCM_SIGNED) && enc.equals(PCM_FLOAT)) {
                       Signed2Float = true;
-                        aFormat = new AudioFormat(PCM_SIGNED,     /* The audio encoding technique: PCM_SIGNED or PCM_FLOAT */
-                                sampleRate,                     /* The number of samples per second */
-                                16, /* size of short in bits */
-                                nChannels,                     /* The number of channels */
-                                nChannels * 2, /* The number of bytes in each frame */
-                                sampleRate/nChannels, /* The number of frames per second */
-                                bfskMsbFirst);
-
                     } else {
                         fLogger.error("Failed to open audio file '%s' due to encoding mismatch: actual '%s', requested: '%s'",
                                 f.getPath(), sIn.getFormat().getEncoding().toString(), enc.toString());
@@ -107,7 +98,7 @@ public class SaAudioFile extends SimpleAudio {
                         return false;
                     }
                 }
-                bytesPerFrame = sIn.getFormat().getFrameSize();
+                bytesPerFrame = getFrameSize();
                 if (bytesPerFrame == AudioSystem.NOT_SPECIFIED) {
                     // some audio formats may have unspecified frame size
                     // in that case we may read any amount of bytes
@@ -132,7 +123,7 @@ public class SaAudioFile extends SimpleAudio {
             try {
                 fTmpChannel.close();
                 FileInputStream fInStream = new FileInputStream(fTmpOut);
-                AudioInputStream aStream = new AudioInputStream(fInStream, aFormat, fTmpOut.length() / getFramesize());
+                AudioInputStream aStream = new AudioInputStream(fInStream, aFormat, fTmpOut.length() / getFrameSize());
                 AudioSystem.write(aStream, type, file);
                 fInStream.close();
             } catch (Exception e) {
@@ -157,7 +148,7 @@ public class SaAudioFile extends SimpleAudio {
             try {
                 res = fTmpChannel.write(byteBuf);
                 if (res>0) {
-                    res /= getFramesize();
+                    res /= getFrameSize();
                 }
             } catch (IOException e) {
                 fLogger.error("Failed to write to temporary buffer file '%s': [%s]", fTmpOut.getPath(), e.getMessage());

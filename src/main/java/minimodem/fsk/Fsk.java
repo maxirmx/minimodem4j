@@ -24,17 +24,15 @@ public class Fsk {
     private final float     bandWidth;
     private final int       nBands;
     private final int	    fftSize;
-    private final float sampleRate;
+  //  private final float sampleRate;
 
     private int   bMark;
     private int   bSpace;
 
     private FloatFFT_1D fft;
 
-
-
     public Fsk(float sampleRate, float fMark, float fSpace, float filterBw) {
-        this.sampleRate = sampleRate;
+      //  this.sampleRate = sampleRate;
 
         this.bandWidth = filterBw;
 
@@ -140,9 +138,17 @@ public class Fsk {
     }
 
     /**
-     * returns confidence value [0.0 to INFINITY]
+     * Frame analyzer
+     * @param sampleBuf                 sample buffer
+     * @param pSamples                  starting position in the buffer
+     * @param samplesPerBit             samples per bit
+     * @param nBits                     number of bits expected
+     * @param expectBitsString          expected bits mask
+     * @return  Number[3]   [0] -->  Сonfidence value [0.0 to INFINITY]: float
+     *                      [1] -->  Bit value (1/0): integer
+     *                      [2] -->  Amplitude:  float
      */
-    private Number[] fskFrameAnalyze(FloatBuffer sampleBuf,
+        private Number[] fskFrameAnalyze(FloatBuffer sampleBuf,
                                      int pSamples,
                                      float samplesPerBit,
                                      int nBits,
@@ -278,11 +284,25 @@ public class Fsk {
         return res;
     }
 
+    /**
+     * LOcates frame with optimal confidence
+     * @param sampleBuf                 sample buffer
+     * @param frameNSamples             samples in frame
+     * @param tryFirstSample            the first position in the buffer to try
+     * @param tryMaxNSamples            maximum number of samples in try
+     * @param tryStepNSamples           shift per try
+     * @param tryConfidenceSearchLimit  confidence limit for a try
+     * @param expectBitsString          expected bit mask
+     * @return  Number[4]   [0] -->  Сonfidence value [0.0 to INFINITY]: float
+     *                      [1] -->  Bits identified: long
+     *                      [2] -->  Amplitude:  float
+     *                      [3] -->  frame start position in the buffer:  int
+     */
     public Number[] fskFindFrame(FloatBuffer sampleBuf,
                                  int frameNSamples,
                                  int tryFirstSample,
-                                 int tryMaxNsamples,
-                                 int tryStepNsamples,
+                                 int tryMaxNSamples,
+                                 int tryStepNSamples,
                                  float tryConfidenceSearchLimit,
                                  byte[] expectBitsString) {
 
@@ -299,7 +319,7 @@ public class Fsk {
         }
         assert expectNBits <= 64; // protect fsk_frame_analyze()
         float samplesPerBit = frameNSamples / expectNBits;
-        // tryStepNsamples = 1;	// pedantic TEST
+        // tryStepNSamples = 1;	// pedantic TEST
         int bestT = 0;
         float bestC = 0.0f, bestA = 0.0f;
         long bestBits = 0;
@@ -308,8 +328,8 @@ public class Fsk {
         // and so on, until we've scanned the whole try_max_nsamples range.
         for (int j = 0; ; j++) {
             int up = j % 2 != 0 ? 1 : -1;
-            int t = tryFirstSample + up * ((j + 1) / 2) * tryStepNsamples;
-            if (t >= tryMaxNsamples) {
+            int t = tryFirstSample + up * ((j + 1) / 2) * tryStepNSamples;
+            if (t >= tryMaxNSamples) {
                 break;
             }
             if (t < 0) {
@@ -359,6 +379,15 @@ public class Fsk {
         return res;
     }
 
+    /**
+     * Calculates signal magnitude for specific band
+     * @param cplr      2*n representation of complex array
+     *                  real(k) <--- cplr[2*k]
+     *                  img[k]  <--- cplir[2*k+1]
+     * @param band      band to calculate magnitude for
+     * @param scalar    norm (magnitude for '1' or 'i')
+     * @return          magnitude
+     */
     static float bandMag(float[] cplr, int band, float scalar )
     {
         float re = cplr[2*band];
@@ -366,6 +395,7 @@ public class Fsk {
         float mag = (float) (Math.sqrt(re*re+im*im) * scalar);
         return mag;
     }
+
     public int getFftSize() {
         return fftSize;
     }

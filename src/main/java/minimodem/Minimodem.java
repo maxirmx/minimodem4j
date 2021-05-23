@@ -199,6 +199,11 @@ class Minimodem implements Callable<Integer> {
 		return (txMode.equals(SA_TRANSMIT))?transmit():receive();
 	}
 
+	/**
+	 * Read data stream from System.in and transmit to audio file(device)
+	 * @return 0 on success
+	 *        <0 on error
+	 */
 	protected int transmit() {
 		SaToneGenerator toneGenerator = new SaToneGenerator();
 		toneGenerator.toneInit(txSinTableLen, txAmplitude);
@@ -213,7 +218,6 @@ class Minimodem implements Callable<Integer> {
 			return -1;
 		}
 
-		fLogger.info("Transmitting ...");
 		Transmitter tx = new Transmitter(saOut,
 				toneGenerator,
 				this);
@@ -223,8 +227,12 @@ class Minimodem implements Callable<Integer> {
 		return 0;
 	}
 
+	/**
+	 * Receive data stream from audio file(device) and write it to System.out
+	 * @return 0 on success
+	 *        <0 on error
+	 */
 	protected int receive() {
-		fLogger.info("Receiving ...");
 		SaAudioFile saIn = new SaAudioFile();
 		if (!saIn.open(file,
 				floatSamples?PCM_FLOAT:PCM_SIGNED,
@@ -240,7 +248,7 @@ class Minimodem implements Callable<Integer> {
 
 		rx.configure(expectDataString);
 		rx.receive(bfskDatabitsEncodeDecode, quiteMode, outputPrintFilter, rxOne);
-
+		saIn.close();
 		return 0;
 	}
 
