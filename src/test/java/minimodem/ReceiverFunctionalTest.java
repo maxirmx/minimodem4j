@@ -45,7 +45,8 @@ public class ReceiverFunctionalTest {
     private void runTest(File fIn, File fSample) {
         String fnOut = fIn.getParent() + "/tmp.txt";
         File fOut = new File(fnOut);
-//        fOut.deleteOnExit();
+    //    fOut.deleteOnExit();
+        PrintStream originalOut = System.out;
         try {
             System.setOut(new PrintStream(new FileOutputStream(fOut)));
         } catch (FileNotFoundException e) {
@@ -53,6 +54,7 @@ public class ReceiverFunctionalTest {
         }
         Minimodem minimodem = setupModem(fIn.getPath());
         assert (minimodem.receive()==0);
+        System.setOut(originalOut);
         assert (compareFiles(fSample, fOut));
     }
 

@@ -106,6 +106,7 @@ public class Fsk {
      * @param sampleBuf     Sample buffer
      * @param pSamples      Starting position to analyze
      * @param nSamples      Number of samples to analyze
+     * @param pre           Preamble for debug output
      * @return  Number[3]   [0] -->  Bit value (1/0): integer
      *                      [1] -->  Signal magnitude: float
      *                      [2] -->  Noise magnitude:  float

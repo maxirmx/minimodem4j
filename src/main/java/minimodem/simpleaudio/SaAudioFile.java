@@ -14,8 +14,14 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
+import java.nio.ShortBuffer;
 import java.nio.channels.FileChannel;
 
+import static java.nio.ByteOrder.nativeOrder;
+import static javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT;
+import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
 import static minimodem.simpleaudio.SaDirection.*;
 
 /**
@@ -31,6 +37,7 @@ public class SaAudioFile extends SimpleAudio {
     protected FileChannel fTmpChannel = null;
     protected AudioInputStream sIn = null;
     protected int bytesPerFrame = 1;
+    protected boolean Signed2Float = false;
 
     /**
      * Opens file
@@ -81,12 +88,25 @@ public class SaAudioFile extends SimpleAudio {
         } else {
             try {
                 sIn = AudioSystem.getAudioInputStream(f);
- /*               if (!sIn.getFormat().getEncoding().equals(enc)) {
-                    fLogger.error("Failed to open audio file '%s' due to encoding mismatch: actual '%s', requested: '%s'",
-                            f.getPath(), sIn.getFormat().getEncoding().toString(), enc.toString());
-                    clean();
-                    return false;
-                } */
+                if (!sIn.getFormat().getEncoding().equals(enc)) {
+                    if(sIn.getFormat().getEncoding().equals(PCM_SIGNED) &&
+                        enc.equals(PCM_FLOAT)) {
+                      Signed2Float = true;
+                        aFormat = new AudioFormat(PCM_SIGNED,     /* The audio encoding technique: PCM_SIGNED or PCM_FLOAT */
+                                sampleRate,                     /* The number of samples per second */
+                                16, /* size of short in bits */
+                                nChannels,                     /* The number of channels */
+                                nChannels * 2, /* The number of bytes in each frame */
+                                sampleRate/nChannels, /* The number of frames per second */
+                                bfskMsbFirst);
+
+                    } else {
+                        fLogger.error("Failed to open audio file '%s' due to encoding mismatch: actual '%s', requested: '%s'",
+                                f.getPath(), sIn.getFormat().getEncoding().toString(), enc.toString());
+                        clean();
+                        return false;
+                    }
+                }
                 bytesPerFrame = sIn.getFormat().getFrameSize();
                 if (bytesPerFrame == AudioSystem.NOT_SPECIFIED) {
                     // some audio formats may have unspecified frame size
@@ -161,7 +181,20 @@ public class SaAudioFile extends SimpleAudio {
             fLogger.error("Cannot read from file '%s' which is open for recording", file.getPath());
         } else {
             try {
-                res = sIn.read(byteBuf.array(), pFrames*bytesPerFrame, nFrames*bytesPerFrame)/bytesPerFrame;
+                if (Signed2Float) {
+                    ByteBuffer bbBuf = ByteBuffer.allocate(nFrames*bytesPerFrame);
+                    bbBuf.order(nativeOrder());
+                    res = sIn.read(bbBuf.array(), 0, nFrames*bytesPerFrame)/bytesPerFrame;
+                    if (res>0) {
+                        ShortBuffer sBuf = bbBuf.asShortBuffer();
+                        FloatBuffer fBuf = byteBuf.asFloatBuffer();
+                        for (int i=0; i<res; i++) {
+                            fBuf.put(pFrames+i, ((float)sBuf.get(i))/(float)Short.MAX_VALUE);
+                        }
+                    }
+                } else {
+                    res = sIn.read(byteBuf.array(), pFrames*bytesPerFrame, nFrames*bytesPerFrame)/bytesPerFrame;
+                }
             } catch (IOException e) {
                 fLogger.error("Cannot read from file '%s': [%s] ", file.getPath(), e.getMessage());
                 res = -1;
@@ -178,6 +211,7 @@ public class SaAudioFile extends SimpleAudio {
         boolean ret = true;
 
         type = null;
+        Signed2Float = false;
         if (fTmpChannel != null) {
             try {
                 fTmpChannel.close();
