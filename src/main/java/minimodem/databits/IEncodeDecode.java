@@ -1,4 +1,4 @@
-/**
+/*
  * minimodem4j
  * IEncodeDecode.java
  * Created from databits.h @ https://github.com/kamalmostafa/minimodem

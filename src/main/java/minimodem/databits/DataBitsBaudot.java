@@ -1,4 +1,4 @@
-/**
+/*
  * minimodem4j
  * Baudot.java
  * Created from databits_baudot.c, databits.h, baudot.c, baudot.h @ https://github.com/kamalmostafa/minimodem

@@ -1,4 +1,4 @@
-/**
+/*
  * minimodem4j
  * SimpleAudio.java
  * Transmitter implementation
@@ -21,8 +21,8 @@ import static minimodem.databits.BitOps.bitReverse;
 import static minimodem.databits.BitOps.bitWindow;
 
 public class Receiver {
-    private static final Logger fLogger = LogManager.getFormatterLogger("Receiver");
-    public final static int SAMPLE_BUF_DIVISOR = 12;
+     private static final Logger fLogger = LogManager.getFormatterLogger("Receiver");
+     private final static int SAMPLE_BUF_DIVISOR = 12;
     /*
      * FSK_ANALYZE_NSTEPS Try 3 frame positions across the try_max_nsamples
      * range.  Using a larger nsteps allows for more accurate tracking of
@@ -30,7 +30,7 @@ public class Receiver {
      * FSK_ANALYZE_NSTEPS_FINE below, which refines the frame
      * position upon first acquiring carrier, or if confidence falls.
      */
-    public final static int FSK_ANALYZE_NSTEPS = 3;
+     private final static int FSK_ANALYZE_NSTEPS = 3;
     /*
      * FSK_ANALYZE_NSTEPS_FINE:
      *  Scan again, but try harder to find the best frame.
@@ -38,8 +38,8 @@ public class Receiver {
      *  fsk_find_frame() call already, we're sure to find one at
      *  least as good this time.
      */
-    public final static int FSK_MAX_NOCONFIDENCE_BITS = 20;
-    public final static int FSK_ANALYZE_NSTEPS_FINE = 8;
+     private final static int FSK_MAX_NOCONFIDENCE_BITS = 20;
+     private final static int FSK_ANALYZE_NSTEPS_FINE = 8;
 
     /*
      * Fraction of nsamples_per_bit that we will "overscan"; range (0.0 .. 1.0)
@@ -53,7 +53,7 @@ public class Receiver {
      * for encodings without start/stop bits:
      *  MUST be <= 0.5 or we may accidentally skip a bit
      */
-     public final static float FRAME_OVERSCAN = 0.5f;
+     private final static float FRAME_OVERSCAN = 0.5f;
 
      private final SimpleAudio rxSaIn;
      private final int sampleRate;
@@ -83,7 +83,6 @@ public class Receiver {
      private byte[] expectSyncString;
      private Fsk fskp;
 
-
    /*
     *    Sample buffer
     *        samplebufSize samples of type float  (viewed as sampleBuf)
@@ -97,9 +96,15 @@ public class Receiver {
     private ByteBuffer sampleBufRaw;
     protected FloatBuffer sampleBuf;
 
+   /*
+    *    Output buffer
+    */
+    private final static int DATAOUT_SIZE = 4_096;
+    private final byte[] dataoutbuf = new byte[DATAOUT_SIZE];
+
 
     /**
-     *
+     * Constructor mainly acquires configuration parameters from the modem cli
      * @param saIn      Input device
      * @param modem     Minimodem instance to inherit configuration from
      */
@@ -208,44 +213,12 @@ public class Receiver {
         int expectNSamples = (int) (nSamplesPerBit * expectNBits);
         float trackAmplitude = 0.0f;
         float peakConfidence = 0.0f;
+        int carrierBand = -1;
 
         while ((ret = refillBuf()) > 0 || samplesNValid > 0) {
-            int carrierBand = -1;
             if (carrierAutodetectThreshold > 0.0f && carrierBand < 0) {
-                int i;
-                float nSamplesPerScan = nSamplesPerBit;
-				if (nSamplesPerScan > fskp.getFftSize()) {
-                    nSamplesPerScan = fskp.getFftSize();
-                }
-                for (i = 0; i + nSamplesPerScan <= samplesNValid; i = (int) (i + nSamplesPerScan)) {
-					carrierBand = fskp.fskDetectCarrier(sampleBuf, i, (int) nSamplesPerScan, carrierAutodetectThreshold);
-                    if (carrierBand >= 0) {
-                        break;
-                    }
-                }
-                advance = (int) (i + nSamplesPerScan);
-                if (advance > samplesNValid) {
-                    advance = samplesNValid;
-                }
-                if (carrierBand < 0) {
-                    fLogger.debug("autodetected carrier band was not found");
-                    continue;
-                }
-                // default negative shift -- reasonable?
-			    int bShift = (int) (- (float)(autodetectShift + bandWidth/2.0f)/bandWidth);
-                if (bfskInvertedFreqs) {
-                    bShift *= -1;
-                }
-                /* only accept a carrier as b_mark if it will not result
-                 * in a bSpace band which is "too low".
-                 */
-                int bSpace = carrierBand + bShift;
-                if (bSpace < 1 || bSpace >= fskp.getnBands()) {
-                    fLogger.debug("autodetected space band out of range");
-                    continue;
-                }
-                fLogger.debug("### TONE freq=%.1f ###", carrierBand*bandWidth);
-                fskp.fskSetTonesByBandshift(/*bMark*/ carrierBand, bShift);
+                carrierBand = carrierAutodetect();
+                if (carrierBand < 0) continue;
             }
             /*
              * The main processing algorithm: scan samplesbuf for FSK frames,
@@ -257,46 +230,43 @@ public class Receiver {
                 break;
             }
 
-           /* try_max_nsamples
-            * serves two purposes:
-            * avoids finding a non-optimal first frame
-            * allows us to track slightly slow signals
+           /*
+            * tryMaxNsamples serves two purposes:
+            *    avoids finding a non-optimal first frame
+            *    allows us to track slightly slow signals
             */
-            int tryMaxNSamples;
-            if(carrier) {
-                tryMaxNSamples = (int)(nSamplesPerBit * 0.75f + 0.5f);
-            } else {
-                tryMaxNSamples = (int)nSamplesPerBit;
-            }
-            tryMaxNSamples += nSamplesOverscan;
+            int tryMaxNSamples = (int)( carrier? (nSamplesPerBit * 0.75f + 0.5f):nSamplesPerBit ) + nSamplesOverscan;
+
             int tryStepNsamples = tryMaxNSamples/FSK_ANALYZE_NSTEPS;
             if(tryStepNsamples == 0) {
                 tryStepNsamples = 1;
             }
             float confidence, amplitude;
-            long bits_U = 0;
-            /* Note: frameStartSample is actually the sample where the
-             * prev_stop bit begins (since the "frame" includes the prev_stop). */
+            long bits = 0;
+            /*
+             * Note: frameStartSample is actually the sample where the
+             * prev_stop bit begins (since the "frame" includes the prev_stop).
+             */
             int frameStartSample = 0;
 
-            int tryFirstSample_U;
+            int tryFirstSample;
             float tryConfidenceSearchLimit;
 
             tryConfidenceSearchLimit = fskConfidenceSearchLimit;
-            tryFirstSample_U = carrier ? nSamplesOverscan : 0;
+            tryFirstSample = carrier ? nSamplesOverscan : 0;
 
             boolean doRefineFrame = false;
 
             Number[] resFF = fskp.fskFindFrame(sampleBuf,
                     expectNSamples,
-                    tryFirstSample_U,
+                    tryFirstSample,
                     tryMaxNSamples,
                     tryStepNsamples,
                     tryConfidenceSearchLimit,
                     carrier ? expectDataString : expectSyncString);
 
             confidence = (float) resFF[0];
-            bits_U = (long) resFF[1];
+            bits = (long) resFF[1];
             amplitude = (float) resFF[2];
             frameStartSample = (int) resFF[3];
 
@@ -332,9 +302,11 @@ public class Receiver {
                         }
                     }
                 }
-                /* Advance the sample stream forward by try_max_nsamples so the
+                /*
+                 * Advance the sample stream forward by tryMaxNsamples so the
                  * next time around the loop we continue searching from where
-                 * we left off this time.		*/
+                 * we left off this time.
+                 */
                 advance = tryMaxNSamples;
                 fLogger.debug("@ NOCONFIDENCE=%d advance=%d", noconfidence, advance);
                 continue;
@@ -346,14 +318,10 @@ public class Receiver {
                 carrierNSamples += frameStartSample;
                 carrierNSamples -= nSamplesOverscan;
             } else { // We just acquired carrier.
-
                 if (!quietMode) {
-                    if (bfskDataRate >= 100) {
-                        fLogger.info("### CARRIER %.2f @ %.1f Hz ", bfskDataRate + 0.5f, fskp.getbMark() * bandWidth);
-                    } else {
-                        fLogger.info("### CARRIER %.2f @ %.1f Hz ", bfskDataRate, fskp.getbMark() * bandWidth);
-                    }
-                    fLogger.info("###");
+                    fLogger.info("### CARRIER %.2f @ %.1f Hz ###",
+                            (bfskDataRate >= 100)?bfskDataRate + 0.5f:bfskDataRate,
+                            fskp.getbMark() * bandWidth);
                 }
 
                 carrier = true;
@@ -374,13 +342,13 @@ public class Receiver {
 
                 resFF = fskp.fskFindFrame(sampleBuf,
                         expectNSamples,
-                        tryFirstSample_U,
+                        tryFirstSample,
                         tryMaxNSamples,
                         tryStepNsamples,
                         tryConfidenceSearchLimit,
                         carrier ? expectDataString : expectSyncString);
                 if((float)resFF[0] > confidence) {
-                    bits_U = (long) resFF[1];
+                    bits = (long) resFF[1];
                     amplitude = (float) resFF[2];
                     frameStartSample = (int) resFF[3];
                 }
@@ -401,11 +369,13 @@ public class Receiver {
             nFramesDecoded++;
             noconfidence = 0;
 
-            // Advance the sample stream forward past the junk before the
-            // frame starts (frame_start_sample), and then past decoded frame
-            // (see also NOTE about frame_n_bits and expect_n_bits)...
-            // But actually advance just a bit less than that to allow
-            // for tracking slightly fast signals, hence - nsamples_overscan.
+            /*
+             * Advance the sample stream forward past the junk before the
+             * frame starts (frameStartSample), and then past decoded frame
+             * (see also NOTE about frameNBits and expectNBits)...
+             * But actually advance just a bit less than that to allow
+             * for tracking slightly fast signals, hence - nSamplesOverscan.
+             */
             advance = frameStartSample + frameNSamples - nSamplesOverscan;
 
             fLogger.debug("@ nsamples_per_bit=%.3f n_data_bits=%d  frame_start=%d advance=%d",
@@ -416,68 +386,92 @@ public class Receiver {
 
             // chop off the prev_stop bit
             if(bfskNStopBits != 0.0f) {
-                bits_U = bits_U >>> 1;
+                bits = bits >>> 1;
             }
             /*
              * Send the raw data frame bits to the backend frame processor
              * for final conversion to output data bytes.
              */
             // chop off framing bits
-            bits_U = bitWindow(bits_U, bfskNStartBits, bfskNDataBits);
+            bits = bitWindow(bits, bfskNStartBits, bfskNDataBits);
             if(bfskMsbFirst) {
-                bits_U = bitReverse(bits_U, bfskNDataBits);
+                bits = bitReverse(bits, bfskNDataBits);
             }
             fLogger.debug("Input: %08x%08x - Databits: %d - Shift: %d",
-                    (int)(bits_U >>> 32),
-                    (int)bits_U,
+                    (int)(bits >>> 32),
+                    (int)bits,
                     bfskNDataBits,
                     bfskNStartBits);
 
-            int dataoutSize_U = 4_096;
-            byte[] dataoutbuf = new byte[4_096];
-            int dataoutNbytes_U = 0;
-
             // suppress printing of bfsk_sync_byte bytes
-            if(bfskDoRxSync) {
-                if(dataoutNbytes_U == 0 && bits_U == bfskSyncByte) {
-                    continue;
+            if(!bfskDoRxSync || bits != bfskSyncByte) {
+                int dataoutNbytes = decoder.decode(dataoutbuf, DATAOUT_SIZE, bits, bfskNDataBits);
+                if(dataoutNbytes != 0) {
+                    for(int p=0; dataoutNbytes != 0; p++, dataoutNbytes--) {
+                        char print = outputPrintFilter ?
+                                ((Character.isISOControl(dataoutbuf[p]) || Character.isSpaceChar(dataoutbuf[p])) ?  '.' : (char) dataoutbuf[p]) :
+                                (char) dataoutbuf[p];
+                        System.out.print(print);
+                    }
                 }
             }
-            dataoutNbytes_U = decoder.decode(dataoutbuf, dataoutSize_U , bits_U, bfskNDataBits);
-
-            if(dataoutNbytes_U == 0) {
-                continue;
-            }
-            /*
-             * Print the output buffer to stdout
-             */
-            for(int p=0; dataoutNbytes_U != 0; p++, dataoutNbytes_U--) {
-                char printable;
-                if(!outputPrintFilter) {
-                    printable = (char) dataoutbuf[p];
-                } else {
-                    printable = (Character.isISOControl(dataoutbuf[p]) || Character.isSpaceChar(dataoutbuf[p])) ?  '.' : (char) dataoutbuf[p];
-                }
-                System.out.print(printable);
-            }
-            if(carrier) {
-                if(!quietMode) {
-                    reportNoCarrier(nFramesDecoded,
-                            carrierNSamples,
-                            confidenceTotal,
-                            amplitudeTotal);
-                }
-            }
+        }
+        if(carrier && !quietMode) {
+            reportNoCarrier(nFramesDecoded,
+                    carrierNSamples,
+                    confidenceTotal,
+                    amplitudeTotal);
         }
         return ret;
     }
 
     /**
-     * A helper function to report "no carrier"
+     * Autodetect carrier
+     * @return carrier band
+     */
+    private int carrierAutodetect() {
+        int cBand = -1;
+        int i;
+        float nSamplesPerScan = nSamplesPerBit;
+        if (nSamplesPerScan > fskp.getFftSize()) {
+            nSamplesPerScan = fskp.getFftSize();
+        }
+        for (i = 0; i + nSamplesPerScan <= samplesNValid; i = (int) (i + nSamplesPerScan)) {
+            cBand = fskp.fskDetectCarrier(sampleBuf, i, (int) nSamplesPerScan, carrierAutodetectThreshold);
+            if (cBand >= 0) {
+                break;
+            }
+        }
+        advance = (int) (i + nSamplesPerScan);
+        if (advance > samplesNValid) {
+            advance = samplesNValid;
+        }
+        if (cBand < 0) {
+            fLogger.debug("autodetected carrier band was not found");
+            return -1;
+        }
+        // default negative shift -- reasonable?
+        int bShift = (int) (- (float)(autodetectShift + bandWidth/2.0f)/bandWidth);
+        if (bfskInvertedFreqs) {
+            bShift *= -1;
+        }
+       /* only accept a carrier as bMark if it will not result in a bSpace band which is "too low".  */
+        int bSpace = cBand + bShift;
+        if (bSpace < 1 || bSpace >= fskp.getnBands()) {
+            fLogger.debug("autodetected space band out of range");
+            return -1;
+        }
+        fLogger.debug("### TONE freq=%.1f ###", cBand*bandWidth);
+        fskp.fskSetTonesByBandshift(cBand, bShift);
+        return cBand;
+    }
+
+    /**
+     * Report "no carrier"
      * @param nFramesDecoded        total number of frames decoded
-     * @param carrierNSamples
-     * @param confidenceTotal
-     * @param amplitudeTotal
+     * @param carrierNSamples       total number of samples processed
+     * @param confidenceTotal       confidence
+     * @param amplitudeTotal        amplitude
      */
     private void reportNoCarrier(int nFramesDecoded,
                                  long carrierNSamples,
@@ -485,24 +479,28 @@ public class Receiver {
                                  float amplitudeTotal) {
         float nBitsDecoded = nFramesDecoded * bfskFrameNBits;
         float throughputRate = nBitsDecoded * sampleRate / carrierNSamples;
-        fLogger.info("\n### NOCARRIER ndata=%d confidence=%.3f ampl=%.3f bps=%.2f",
+
+        String rateMsg;
+        if ((long)(nBitsDecoded * sampleRate + 0.5f) == (long)(bfskDataRate * carrierNSamples)) {
+            rateMsg = " (rate perfect) ###";
+        } else {
+            float throughputSkew = (throughputRate - bfskDataRate) / bfskDataRate;
+            rateMsg = String.format(" (%.1f%% %s) ###",
+                    Math.abs(throughputSkew) * 100.0f,
+                    Math.signum(throughputSkew) < 0 ? "slow" : "fast");
+        }
+
+        fLogger.info("### NOCARRIER ndata=%d confidence=%.3f ampl=%.3f bps=%.2f %s",
                 nFramesDecoded,
                 confidenceTotal/ nFramesDecoded,
                 amplitudeTotal / nFramesDecoded,
-                throughputRate);
-        if((long)(nBitsDecoded * sampleRate + 0.5f) == (long)(bfskDataRate * carrierNSamples)) {
-            fLogger.info(" (rate perfect) ###");
-        } else {
-            float throughputSkew = (throughputRate - bfskDataRate) / bfskDataRate;
-            fLogger.info(" (%.1f%% %s) ###",
-                    (float)(Math.abs(throughputSkew) * 100.0f), Math.signum(throughputSkew) < 0 ? "slow" : "fast");
-        }
+                throughputRate,
+                rateMsg);
     }
-
 
     /**
      * Builds expected bits string
-     * Example expect_bits_string
+     * Example expectBitsString
      *	  0123456789A
      *	  isddddddddp	i == idle bit (a.k.a. prev_stop bit)
      *			s == start bit  d == data bits  p == stop bit
@@ -518,10 +516,10 @@ public class Receiver {
      *                       start--v        v--stop
      * char *expect_bits_string = "10dddddddd1";
      *
-     * @param expectBitsString
-     * @param useExpectBits
-     * @param expectBits
-     * @return a mask for expected string
+     * @param expectBitsString      a buffer to store the mask to expect
+     * @param useExpectBits         wheather to use expected bits
+     * @param expectBits            expectedBits
+     * @return expected string length
      */
     protected int buildExpectBitsString(byte[] expectBitsString,
                                         int useExpectBits,
@@ -551,7 +549,7 @@ public class Receiver {
     }
 
     /**
-     *
+     * Helper function to convert 0 padded byte array to printable string
      * @param a byte array presumably padded with 0s (output of buildExpectBitsString)
      * @return string representation including trailing '\0'
      *          if there is no trailing '\0'  '>>' will be added (looks abnormal)
@@ -567,8 +565,9 @@ public class Receiver {
     }
 
     /**
-     * Shifts sample buffer for p positions left (sampleBuf[0] <-- sampleBuf[p])
-     * @param p
+     * Shifts receiver sample buffer for p positions left
+     * (sampleBuf[0] <-- sampleBuf[p], sampleBuf[1] <-- sampleBuf[p+1], ...)
+     * @param p  positions to shift
      */
     protected void shiftSampleBuf(int p) {
         int i,j;
@@ -581,14 +580,15 @@ public class Receiver {
     /**
      * Helper function to (re)fill samples buffer
      * @return  >0   OK, number of samples red
-     *          ==0  EOF reached
+     *          ==0  OK, EOF reached
      *          <0   Error
      */
     protected int refillBuf() {
         int r = -1;
         fLogger.debug("Refilling buffer: advance = %d, samplesNValid = %d", advance, samplesNValid);
         /*
-         * (not really required for Java)
+         * ... not really required for Java, JVM will take care of it ...
+         *  Invariants:
          *     assert advance <= samplebufSize;
          *     assert advance <= samplesNValid;
          */
@@ -606,13 +606,13 @@ public class Receiver {
         if (samplesNValid < samplebufSize / 2) {
             int readNSamples = samplebufSize / 2;
         /*
-         *  (not really required for Java)
+         * ... not really required for Java, JVM will take care of it ...
+         *  Invariants:
          *     assert readNSamples > 0;
          *     assert samplesNValid + readNSamples <= samplebufSize;
          */
 
-        /* Read more samples into samplebuf (fill it) */
-            r = rxSaIn.read(sampleBufRaw, readNSamples);
+            r = rxSaIn.read(sampleBufRaw, samplesNValid, readNSamples);
             fLogger.debug("Reading audio (%d samples) returns %d", readNSamples, r);
             if (r < 0) {
                 fLogger.error("Audio file read error");

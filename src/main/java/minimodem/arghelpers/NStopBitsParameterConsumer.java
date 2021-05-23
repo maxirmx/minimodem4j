@@ -1,4 +1,4 @@
-/**
+/*
  * minimodem4j
  * picocli argument parser helper class
  * Serves "--stopbits"

@@ -1,4 +1,4 @@
-/**
+/*
  * minimodem4j
  * Binary.java
  * Created from databits_binary.c, databits.h @ https://github.com/kamalmostafa/minimodem

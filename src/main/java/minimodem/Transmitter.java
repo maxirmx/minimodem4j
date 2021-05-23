@@ -37,7 +37,7 @@ public class Transmitter {
     private int txBitNsamples;
 
     /**
-     * Transmitter
+     * Constructor mainly acquires configuration parameters from the modem cli
      * @param saOut     Output device
      * @param saTone    Tone generator (modulator)
      * @param modem     Minimodem instance to inherit configuration from

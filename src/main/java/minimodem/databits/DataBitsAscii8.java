@@ -1,4 +1,4 @@
-/**
+/*
  * minimodem4j
  * Ascii8.java
  * Created from databits_ascii.c, databits.h @ https://github.com/kamalmostafa/minimodem

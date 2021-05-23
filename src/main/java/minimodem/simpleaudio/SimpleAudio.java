@@ -1,4 +1,4 @@
-/**
+/*
  * minimodem4j
  * SimpleAudio.java
  * Analog for simpleaudio.c, simpleaudio.h @ https://github.com/kamalmostafa/minimodem
@@ -15,7 +15,7 @@ import static javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT;
 import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
 
 /**
- *  Abstraction of audion device
+ *  Abstraction of audio device
  */
 public abstract class SimpleAudio {
     private static final Logger fLogger = LogManager.getFormatterLogger(SimpleAudio.class);
@@ -68,6 +68,16 @@ public abstract class SimpleAudio {
         }
     }
 
+    /**
+     * Opens audio
+     * @param encoding encoding (Java sampled audio AudioFormat.Encoding)
+     * @param dir operation direction (PLAYBACK or RECORD)
+     * @param sampleRate  sample rate
+     * @param nChannels  the number of channels (actually only 1 is supported)
+     * @param bfskMsbFirst  Big endian flag. This shall match audio file format specification
+     * @return true on success, false on error
+     */
+
     public boolean open(AudioFormat.Encoding encoding, SaDirection dir, int sampleRate, int nChannels, boolean bfskMsbFirst) {
         direction = dir;
         if (nChannels != 1) {
@@ -101,18 +111,27 @@ public abstract class SimpleAudio {
 
     /**
      * Reads given number of frames into buffer
-     * @param byteBuf
-     * @param nFrames
-     * @return the number of frames actually red
+     * @param byteBuf  ByteBuffer to store samples
+     * @param pFrames  The first frame to read
+     * @param nFrames  Maximum number of frames to read
+     * @return  >0   OK, number of samples red
+     *          ==0  OK, EOF reached or line closed
+     *          -1   Error
      */
-    abstract public int read(ByteBuffer byteBuf, int nFrames);
+    abstract public int read(ByteBuffer byteBuf, int pFrames, int nFrames);
 
     /**
-     * Writes given number of frames from buffer
-     * @param byteBuf
-     * @param nFrames
-     * @return the number of frames actually written
+     * Writes audio samples to file (actually, to temp. buffer)
+     * @param byteBuf   ByteBuffer to write
+     * @param nFrames   Number of frames to write
+     * @return number of frames written, -1 on error
      */
     abstract public int write (ByteBuffer byteBuf, int nFrames);
+
+    /**
+     * Close file, cleans associated resources
+     * For SA_TRANSMIT mode it also means repackaging of raw sound buffer into appropriate file format
+     */
+    abstract public void close();
 
 }

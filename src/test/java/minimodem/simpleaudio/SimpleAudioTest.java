@@ -56,12 +56,12 @@ public class SimpleAudioTest {
         assert (f.open(fOut, PCM_FLOAT, SA_TRANSMIT, 48000, 1, false));
         ByteBuffer buf = ByteBuffer.allocate(4);
         buf.put((byte) '1').put((byte) '2').put((byte) '3').put((byte) '4');
-        assert (f.write(buf, 0) == 4);
+        assert (f.write(buf, 1) == 1);
         f.close();
         assert (f.open(fOut, PCM_FLOAT, SA_RECEIVE, 48000, 1, false));
         buf.rewind();
-        assert (f.read(buf, 1) == 1);
-        assert (f.read(buf, 1) == 0);
+        assert (f.read(buf, 0,1) == 1);
+        assert (f.read(buf, 0, 1) == 0);
         f.close();
         String rs = new String(buf.array());
         assert rs.equals("1234");

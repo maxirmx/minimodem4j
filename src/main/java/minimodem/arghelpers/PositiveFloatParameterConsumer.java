@@ -1,4 +1,4 @@
-/**
+/*
  * minimodem4j
  * picocli argument parser helper class
  * Serves parameters of Float type that shall be positive
@@ -9,7 +9,7 @@ import picocli.CommandLine;
 import java.util.Stack;
 
 public class PositiveFloatParameterConsumer implements CommandLine.IParameterConsumer {
-    private String name;
+    private final String name;
     protected PositiveFloatParameterConsumer(String nm) {
         name = nm;
     }

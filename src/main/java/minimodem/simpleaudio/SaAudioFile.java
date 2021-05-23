@@ -1,3 +1,7 @@
+/*
+ * minimodem4j
+ * SaAudioFile.java
+ */
 package minimodem.simpleaudio;
 
 import org.apache.commons.io.FilenameUtils;
@@ -14,14 +18,16 @@ import java.nio.channels.FileChannel;
 
 import static minimodem.simpleaudio.SaDirection.*;
 
-
+/**
+ * Audio file abstraction
+ */
 public class SaAudioFile extends SimpleAudio {
     private static final Logger fLogger = LogManager.getFormatterLogger(SaAudioFile.class);
 
     protected SaDirection direction;
     protected AudioFileFormat.Type type = null;
     protected File fTmpOut = null;
-    protected File fOut = null;
+    protected File file = null;
     protected FileChannel fTmpChannel = null;
     protected AudioInputStream sIn = null;
     protected int bytesPerFrame = 1;
@@ -34,7 +40,7 @@ public class SaAudioFile extends SimpleAudio {
      * @param sampleRate  sample rate
      * @param nChannels  the number of channels (actually only 1 is supported)
      * @param bfskMsbFirst  Big endian flag. This shall match audio file format specification
-     * @return
+     * @return true on success, false on error
      */
     public boolean open(File f, AudioFormat.Encoding enc, SaDirection dir,
                         int sampleRate, int nChannels, boolean bfskMsbFirst)  {
@@ -44,7 +50,7 @@ public class SaAudioFile extends SimpleAudio {
         }
         clean();
         direction = dir;
-        fOut = f;
+        file = f;
 
         if (!super.open(enc, dir, sampleRate, nChannels, bfskMsbFirst)) {
             return false;
@@ -96,6 +102,10 @@ public class SaAudioFile extends SimpleAudio {
         return true;
     }
 
+    /**
+     * Close file, cleans associated resources
+     * For SA_TRANSMIT mode it also means repackaging of raw sound buffer into appropriate file format
+     */
     public void close()
     {
         if (direction == SA_TRANSMIT) {
@@ -103,45 +113,67 @@ public class SaAudioFile extends SimpleAudio {
                 fTmpChannel.close();
                 FileInputStream fInStream = new FileInputStream(fTmpOut);
                 AudioInputStream aStream = new AudioInputStream(fInStream, aFormat, fTmpOut.length() / getFramesize());
-                AudioSystem.write(aStream, type, fOut);
+                AudioSystem.write(aStream, type, file);
                 fInStream.close();
             } catch (Exception e) {
-                fLogger.error("Failed to write output file '%s': [%s]", fOut.getPath(), e.getMessage());
+                fLogger.error("Failed to write output file '%s': [%s]", file.getPath(), e.getMessage());
             }
         }
         clean();
     }
 
+    /**
+     * Writes audio samples to file (actually, to temp. buffer)
+     * @param byteBuf   ByteBuffer to write
+     * @param nFrames   Number of frames to write
+     * @return number of frames written, -1 on error
+     */
     public int write(ByteBuffer byteBuf, int nFrames) {
+        int res = -1;
         if (direction == SA_RECEIVE) {
-            fLogger.error("Cannot read from file '%s' which is open for playback", fOut.getPath());
-            return 0;
+            fLogger.error("Cannot read from file '%s' which is open for playback", file.getPath());
+        } else {
+            byteBuf.rewind();
+            try {
+                res = fTmpChannel.write(byteBuf);
+                if (res>0) {
+                    res /= getFramesize();
+                }
+            } catch (IOException e) {
+                fLogger.error("Failed to write to temporary buffer file '%s': [%s]", fTmpOut.getPath(), e.getMessage());
+            }
         }
-        int ret = 0;
-        byteBuf.rewind();
-        try {
-            ret = fTmpChannel.write(byteBuf);
-        } catch (IOException e) {
-            fLogger.error("Failed to write to temporary buffer file '%s': [%s]", fTmpOut.getPath(), e.getMessage());
-        }
-        return ret;
+        return res;
     }
 
-    public int read(ByteBuffer byteBuf, int nFrames) {
+    /**
+     * Reads audio samples from file
+     * @param byteBuf  ByteBuffer to store samples
+     * @param pFrames  The first frame to read
+     * @param nFrames  Maximum number of frames to read
+     * @return  >0   OK, number of samples red
+     *          ==0  OK, EOF reached
+     *          -1   Error
+     */
+    public int read(ByteBuffer byteBuf, int pFrames, int nFrames) {
         int res=-1;
         if (direction == SA_TRANSMIT) {
-            fLogger.error("Cannot read from file '%s' which is open for recording", fOut.getPath());
+            fLogger.error("Cannot read from file '%s' which is open for recording", file.getPath());
         } else {
             try {
-                res = sIn.read(byteBuf.array(), 0, nFrames*bytesPerFrame)/bytesPerFrame;
+                res = sIn.read(byteBuf.array(), pFrames*bytesPerFrame, nFrames*bytesPerFrame)/bytesPerFrame;
             } catch (IOException e) {
-                fLogger.error("Cannot read from file '%s': [%s] ", fOut.getPath(), e.getMessage());
+                fLogger.error("Cannot read from file '%s': [%s] ", file.getPath(), e.getMessage());
                 res = -1;
             }
         }
         return res;
     }
 
+    /**
+     * Cleans resource associated with a file as smoothly as possible
+     * @return false if error have arised, true otherwise
+     */
     protected boolean clean() {
         boolean ret = true;
 
@@ -156,7 +188,7 @@ public class SaAudioFile extends SimpleAudio {
             }
         }
         if (fTmpOut != null) {
-            fTmpOut.delete();
+            ret = fTmpOut.delete();
             fTmpOut = null;
         }
 

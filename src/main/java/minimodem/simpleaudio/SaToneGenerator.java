@@ -1,4 +1,4 @@
-/**
+/*
  * minimodem4j
  * SaToneGenerator.java
  * Created from simple-tone-generator.c, simpleaudio.h @ https://github.com/kamalmostafa/minimodem
@@ -16,6 +16,9 @@ import static java.nio.ByteOrder.nativeOrder;
 import static javax.sound.sampled.AudioFormat.Encoding.PCM_FLOAT;
 import static javax.sound.sampled.AudioFormat.Encoding.PCM_SIGNED;
 
+/**
+ * Tone generator (modulator)
+ */
 public class SaToneGenerator {
     private static final Logger fLogger = LogManager.getFormatterLogger(SaToneGenerator.class);
     /**
@@ -31,49 +34,6 @@ public class SaToneGenerator {
     private float toneMagFloat = 1.0f;
     private short toneMagShort = (short) (0.5f);
     private float saToneCphase = 0.0f;
-
-    /**
-     * lroundf Equivalent of C99 function - Halfway values are rounded away from zero
-     * @param v - a value to round
-     * @return rounded value
-     */
-    private static short lroundf(float v) {
-        if (v > 0) {
-            return (short) Math.round(v);
-        } else {
-            return (short) -Math.round(-v);
-        }
-    }
-
-    /**
-     * Table value (approximation) of sine(turns) as signed short
-     * @param turns  (0.0 to 1.0)
-     * @return sine (-32767 to +32767)
-     */
-    private short sinLuShort(float turns) {
-        int t = (int) (sinTableLen * turns + 0.5f);
-        t = Integer.remainderUnsigned(t, sinTableLen);
-        return sinTableShort[t];
-    }
-
-    /**
-     * Table value (approximation) of sine(turns) as float
-     * @param turns (0.0 to 1.0)
-     * @return -1.0 to +1.0
-     */
-    private float sinLuFloat(float turns) {
-        int t = (int) (sinTableLen * turns + 0.5f);
-        t = Integer.remainderUnsigned(t, sinTableLen);
-        return sinTableFloat[t];
-    }
-    /**
-     * Convert turns to radians
-     * @param turns (0.0 to 1.0)
-     * @return radians
-     */
-    public static float turnsToRadians(float turns) {
-        return (float) Math.PI * 2 * turns;
-    }
 
     /**
      * Initialize or drop sine lookup table
@@ -162,23 +122,66 @@ public class SaToneGenerator {
     }
 
     /**
-     *
+     * lroundf Equivalent of C99 function - Halfway values are rounded away from zero
+     * @param v - a value to round
+     * @return rounded value
+     */
+    private static short lroundf(float v) {
+        if (v > 0) {
+            return (short) Math.round(v);
+        } else {
+            return (short) -Math.round(-v);
+        }
+    }
+
+    /**
+     * Table value (approximation) of sine(turns) as signed short
+     * @param turns  (0.0 to 1.0)
+     * @return sine (-32767 to +32767)
+     */
+    private short sinLuShort(float turns) {
+        int t = (int) (sinTableLen * turns + 0.5f);
+        t = Integer.remainderUnsigned(t, sinTableLen);
+        return sinTableShort[t];
+    }
+
+    /**
+     * Table value (approximation) of sine(turns) as float
+     * @param turns (0.0 to 1.0)
+     * @return -1.0 to +1.0
+     */
+    private float sinLuFloat(float turns) {
+        int t = (int) (sinTableLen * turns + 0.5f);
+        t = Integer.remainderUnsigned(t, sinTableLen);
+        return sinTableFloat[t];
+    }
+
+    /**
+     * Helper function
      * @param i
      * @param waveNsamples
-     * @return
+     * @return sine
      */
-    public float sinePhaseTurns(int i, float waveNsamples) {
+    private float sinePhaseTurns(int i, float waveNsamples) {
         return (float) i / waveNsamples + saToneCphase;
     }
 
     /**
-     *
+     * Helper function
      * @param i
      * @param waveNsamples
-     * @return
+     * @return sine
      */
-    public float sinePhaseRadians(int i, float waveNsamples) {
+    private float sinePhaseRadians(int i, float waveNsamples) {
         return turnsToRadians(sinePhaseTurns(i, waveNsamples));
+    }
+    /**
+     * Convert turns to radians
+     * @param turns (0.0 to 1.0)
+     * @return radians
+     */
+    private static float turnsToRadians(float turns) {
+        return (float) Math.PI * 2 * turns;
     }
 
 }

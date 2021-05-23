@@ -1,4 +1,4 @@
-/**
+/*
  * UicCodes.java
  * Created from uic_codes.c, uic_codes.h @ https://github.com/kamalmostafa/minimodem
  */

@@ -1,13 +1,10 @@
-/**
+/*
  * minimodem4j
  * BitOpes.java
  * Created from databits.h @ https://github.com/kamalmostafa/minimodem
  */
 
 package minimodem.databits;
-/**
- *
- */
 
 public class BitOps {
     /**
@@ -33,7 +30,7 @@ public class BitOps {
      * @return
      */
     public static long bitWindow(long value, int offset, int bits) {
-        long mask = (1l << bits) - 1;
+        long mask = (1L << bits) - 1;
         if(mask == 0) {        /* handle bits==64 */
             return value >>> offset;
         }
