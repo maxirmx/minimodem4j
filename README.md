@@ -8,5 +8,5 @@ With Minimodem4j, users can interactively transmit and receive audio modem signa
 
 This tool enables data transfer between proximate computers via audio connections (or even sound waves), as well as facilitates communication between distant computers through radio, telephone, or other audio communication channels.
 
-This is implementation is inspired of C  minimodem software (https://github.com/kamalmostafa/minimodem).
+This implementation is inspired by C minimodem software (https://github.com/kamalmostafa/minimodem).
 
