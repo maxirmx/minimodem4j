@@ -1,6 +1,6 @@
 # About
 
-minimodem4j - general-purpose Java implementation of audio FSK modem
+Minimodem4j - general-purpose Java implementation of audio FSK modem
 
 Minimodem4j is a command-line tool designed to interpret or generate audio modem signals at user-defined baud rates, utilizing different framing protocols. It functions as a flexible software FSK modem, supporting a variety of standard FSK protocols.
 
