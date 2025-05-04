@@ -1,12 +1,17 @@
-# About
+ minimodem4j
 
-Minimodem4j - general-purpose Java implementation of audio FSK modem
+**minimodem4j** is a general-purpose Java implementation of an audio Frequency-Shift Keying (FSK) modem.  
+It enables encoding and decoding of data over audio signals, allowing communication over sound devices or audio files.
 
-Minimodem4j is a command-line tool designed to interpret or generate audio modem signals at user-defined baud rates, utilizing different framing protocols. It functions as a flexible software FSK modem, supporting a variety of standard FSK protocols.
+Inspired by the [minimodem C project](https://github.com/kamalmostafa/minimodem), `minimodem4j` brings similar functionality to the Java ecosystem with no native dependencies.
 
-With Minimodem4j, users can interactively transmit and receive audio modem signals in real-time through the system's audio interface, or process batches of audio files. 
+---
 
-This tool enables data transfer between proximate computers via audio connections (or even sound waves), as well as facilitates communication between distant computers through radio, telephone, or other audio communication channels.
+## Features
 
-This implementation is inspired by C minimodem software (https://github.com/kamalmostafa/minimodem).
-
+- Pure Java implementation (no JNI or native binaries required)
+- Encode/decode data to/from WAV audio files
+- Real-time audio transmission and reception
+- Customizable baud rates and protocols (e.g., ASCII, binary)
+- Simple and extensible API
+- Available under MIT license
