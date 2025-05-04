@@ -1,4 +1,4 @@
- minimodem4j
+# minimodem4j
 
 **minimodem4j** is a general-purpose Java implementation of an audio Frequency-Shift Keying (FSK) modem.
 It enables encoding and decoding of data over audio signals, allowing communication over sound devices or audio files.
